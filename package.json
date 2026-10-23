@@ -4,7 +4,29 @@
   "private": true,
   "description": "Windows screen capture and annotation app",
   "main": "src/main.js",
-  "scripts": {"start":"electron .", "test":"node --test", "dist":"electron-builder --win nsis"},
-  "devDependencies": {"electron":"^40.0.0", "electron-builder":"^26.0.12"},
-  "build": {"appId":"com.siewan.captureprogram", "productName":"Capture Program", "files":["src/**/*", "package.json"], "win":{"target":"nsis"},"nsis":{"oneClick":false,"allowToChangeInstallationDirectory":true}}
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test",
+    "dist": "electron-builder --win nsis"
+  },
+  "devDependencies": {
+    "electron": "^40.0.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.siewan.captureprogram",
+    "productName": "Capture Program",
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
 }
