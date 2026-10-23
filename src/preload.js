@@ -1,0 +1,2 @@
+const {contextBridge,ipcRenderer} = require('electron');
+contextBridge.exposeInMainWorld('captureAPI',{sources:type=>{if(!['screen','window'].includes(type))throw new Error('Invalid source');return ipcRenderer.invoke('sources',type);},saveDirectory:()=>ipcRenderer.invoke('save-directory'),chooseSaveDirectory:()=>ipcRenderer.invoke('choose-save-directory'),save:payload=>ipcRenderer.invoke('save',payload),shortcuts:settings=>ipcRenderer.invoke('shortcuts',settings),onCapture:callback=>ipcRenderer.on('capture-shortcut',(_,mode)=>callback(mode))});
