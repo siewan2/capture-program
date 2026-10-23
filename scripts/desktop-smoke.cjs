@@ -34,7 +34,12 @@ const path = require('node:path');
     const selected=await overlay.inputValue('#capturePresets');await overlay.selectOption('#capturePresets','0');await overlay.selectOption('#capturePresets',selected);
     await overlay.click('#fixedCapture');await page.waitForFunction(()=>document.querySelector('#count').textContent==='2'&&!document.querySelector('#rotate').disabled);
     assert.deepEqual(await page.locator('#editor').evaluate(c=>({width:c.width,height:c.height})),{width:321,height:213});
-    assert.deepEqual(errors,[]);console.log('PASS actual Electron: Ctrl-drag horizontal/vertical zoom and workspace capture, unchanged bitmap/history, real overlay dimensions/preset IPC/persistence and native crop. Screen pixels substituted.');
+    await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('클립보드에 복사'));
+    assert.deepEqual(await application.evaluate(({clipboard})=>clipboard.readImage().getSize()),{width:321,height:213});
+    assert.equal(await application.evaluate(({clipboard,nativeImage},data)=>clipboard.readImage().toBitmap().equals(nativeImage.createFromDataURL(data).toBitmap()),await page.locator('#editor').evaluate(c=>c.toDataURL())),true);
+    const cancelled=application.waitForEvent('window');await page.click('#region');const cancelledOverlay=await cancelled;await cancelledOverlay.waitForFunction(()=>document.querySelector('#surface').width>300);await cancelledOverlay.keyboard.press('Escape');await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('취소'));
+    assert.deepEqual(await application.evaluate(({clipboard})=>clipboard.readImage().getSize()),{width:321,height:213});
+    assert.deepEqual(errors,[]);console.log('PASS actual Electron: Ctrl-drag horizontal/vertical zoom and workspace capture, unchanged bitmap/history, real overlay dimensions/preset IPC/persistence and native crop, automatic native clipboard copy and cancellation preservation. Screen pixels substituted.');
   } finally {
     if(application)await application.close();
     await fs.rm(profile,{recursive:true,force:true,maxRetries:5,retryDelay:200});

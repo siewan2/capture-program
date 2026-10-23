@@ -120,7 +120,11 @@ async function begin(mode){
   try{
     const preset=presets[Number($('presets').value)];
     const data=await window.captureAPI.captureOverlay(mode,preset,{magnifier:settings.magnifier,presets});
-    if(data){showTab('capture');addCapture(data);}else status('캡처를 취소했습니다.');
+    if(data){
+      showTab('capture');addCapture(data);
+      try{await window.captureAPI.copyImage(data);status('캡처 이미지를 클립보드에 복사했습니다.');}
+      catch(error){status(`캡처 완료 · 클립보드 복사 실패: ${error.message}`);}
+    }else status('캡처를 취소했습니다.');
   }catch(error){status(`캡처 실패: ${error.message}`);}finally{busy=false;}
 }
 $('region').onclick=()=>begin('region');$('window').onclick=()=>begin('window');$('fixed').onclick=()=>begin('fixed');
