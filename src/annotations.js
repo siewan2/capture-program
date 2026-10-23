@@ -10,10 +10,18 @@ function drawStroke(context,points,options){
   else{context.moveTo(points[0].x,points[0].y);for(const point of points.slice(1))context.lineTo(point.x,point.y);context.stroke();}
   context.restore();
 }
+function textFont(options){return `${options.italic?'italic ':''}${options.bold?'700 ':'400 '}${options.size}px "Segoe UI", sans-serif`;}
 function drawText(context,text,point,options){
-  context.save();context.fillStyle=options.color;context.font=`${options.size}px "Segoe UI", sans-serif`;
+  context.save();context.fillStyle=options.color;context.font=textFont(options);
   context.textBaseline='top';
-  text.split('\n').forEach((line,index)=>context.fillText(line,point.x,point.y+index*options.size*1.25));
+  text.split('\n').forEach((line,index)=>{
+    const y=point.y+index*options.size*1.25;
+    context.fillText(line,point.x,y);
+    if(options.underline&&line){
+      const metrics=context.measureText(line);
+      context.fillRect(point.x,y+options.size*1.06,metrics.width,Math.max(1,options.size/16));
+    }
+  });
   context.restore();
 }
-if(typeof module!=='undefined')module.exports={drawStroke,drawText};
+if(typeof module!=='undefined')module.exports={drawStroke,drawText,textFont};

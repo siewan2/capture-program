@@ -1,15 +1,21 @@
 const canvas=document.getElementById('surface'),ctx=canvas.getContext('2d'),hint=document.getElementById('hint');
-let config,image,start=null,rect=null,submitted=false,hovered=null;
+let config,image,start=null,rect=null,submitted=false,hovered=null,cursor=null;
 function paint(){
-  ctx.drawImage(image,0,0,canvas.width,canvas.height);ctx.fillStyle='#0006';ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.drawImage(image,0,0,canvas.width,canvas.height);if(config.mode!=='window'){ctx.fillStyle='#0006';ctx.fillRect(0,0,canvas.width,canvas.height);}
   if(config.mode==='window'){
     if(hovered){
       const sx=canvas.width/config.bounds.width,sy=canvas.height/config.bounds.height;
-      ctx.fillStyle='#ff24243d';ctx.strokeStyle='#ff3030';ctx.lineWidth=3*sx;
-      ctx.fillRect(hovered.x*sx,hovered.y*sy,hovered.width*sx,hovered.height*sy);ctx.strokeRect(hovered.x*sx,hovered.y*sy,hovered.width*sx,hovered.height*sy);
+      ctx.strokeStyle='#ff3030';ctx.lineWidth=3*sx;
+      ctx.strokeRect(hovered.x*sx,hovered.y*sy,hovered.width*sx,hovered.height*sy);
       hint.textContent=hovered.name+' · 클릭하여 창 캡처 · Esc 취소';
     }else hint.textContent='캡처할 창 위로 마우스를 이동하세요 · Esc 취소';
   }else if(rect){const r=pixelRect(rect,config.bounds,config.imageSize);ctx.drawImage(image,r.x,r.y,r.width,r.height,r.x,r.y,r.width,r.height);ctx.strokeStyle='#b6a8ff';ctx.lineWidth=2*canvas.width/config.bounds.width;ctx.strokeRect(r.x,r.y,r.width,r.height);hint.textContent=`${r.width} × ${r.height} px · ${config.mode==='fixed'?'클릭하여 캡처':'마우스를 놓으면 캡처'} · Esc 취소`;}
+  if(config.mode==='region'&&cursor){
+    const x=Math.floor(cursor.x*canvas.width/config.bounds.width)+0.5,y=Math.floor(cursor.y*canvas.height/config.bounds.height)+0.5;
+    ctx.save();ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,canvas.height);ctx.moveTo(0,y);ctx.lineTo(canvas.width,y);
+    ctx.strokeStyle='#000';ctx.lineWidth=3;ctx.stroke();ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.stroke();ctx.restore();
+  }
+
 
 }
 function magnify(p){
@@ -33,16 +39,16 @@ canvas.onpointerdown=e=>{
   if(!config||e.button!==0||submitted)return;
   if(config.mode==='window'){hoverWindow(point(e));if(hovered){submitted=true;window.overlayAPI.select({windowId:hovered.id});}return;}
   canvas.setPointerCapture(e.pointerId);
-  magnify(point(e));
+  cursor=point(e);magnify(cursor);
   if(config.mode==='fixed'){fixedAt(point(e));if(rect)submit();return;}
-  start=point(e);rect=null;
+  start=point(e);rect=null;paint();
 };
 canvas.onpointermove=e=>{
   if(!config||submitted)return;
   if(config.mode==='window'){hoverWindow(point(e));paint();return;}
-  magnify(point(e));
+  cursor=point(e);magnify(cursor);
   if(config.mode==='fixed'){fixedAt(point(e));paint();return;}
-  if(!start)return;
+  if(!start){paint();return;}
   const next=selection(start,point(e),config.bounds.width,config.bounds.height);
   rect=next.width>=1&&next.height>=1?next:null;paint();
 };
@@ -52,7 +58,7 @@ canvas.onpointerup=e=>{
   rect=next.width>=1&&next.height>=1?next:null;
   if(rect)submit();else{paint();hint.textContent='마우스로 영역을 드래그하세요 · Esc 취소';}
 };
-canvas.onpointerleave=()=>{document.getElementById('magnifier').hidden=true;};
+canvas.onpointerleave=()=>{document.getElementById('magnifier').hidden=true;cursor=null;if(image?.complete)paint();};
 canvas.onpointercancel=()=>{start=null;rect=null;if(config)paint();};
 document.onkeydown=e=>{if(e.key==='Escape')window.overlayAPI.cancel();};
 document.oncontextmenu=e=>{e.preventDefault();window.overlayAPI.cancel();};

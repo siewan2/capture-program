@@ -88,16 +88,18 @@ async function begin(mode){
 $('region').onclick=()=>begin('region');$('window').onclick=()=>begin('window');$('fixed').onclick=()=>begin('fixed');
 const toolOptions={
   pen:{color:'#ff524f',width:3},highlighter:{color:'#ffeb3b',width:28,opacity:0.35},
-  rect:{color:'#ff524f',width:3},ellipse:{color:'#ff524f',width:3},text:{color:'#ff524f',size:32}
+  rect:{color:'#ff524f',width:3},ellipse:{color:'#ff524f',width:3},text:{color:'#000000',size:32,bold:false,italic:false,underline:false}
 };
 let textDraft=null;
-const swatches=[['노랑','#ffeb3b'],['초록','#64e572'],['하늘','#43d9ff'],['분홍','#ff77b7'],['주황','#ffad42'],['보라','#b18aff'],['빨강','#ff524f']];
+const swatches=[['검정','#000000'],['노랑','#ffeb3b'],['초록','#64e572'],['하늘','#43d9ff'],['분홍','#ff77b7'],['주황','#ffad42'],['보라','#b18aff'],['빨강','#ff524f']];
 for(const [name,color] of swatches){const button=document.createElement('button');button.title=name;button.setAttribute('aria-label',name);button.dataset.color=color;button.style.backgroundColor=color;button.onclick=()=>{$('color').value=color;changeOptions();};$('colorSwatches').append(button);}
 function syncOptions(){
   const options=toolOptions[tool]||toolOptions.pen;
   $('color').value=options.color;$('weight').value=options.width||3;
+  $('textColor').value=toolOptions.text.color;
+  for(const [id,key] of [['textBold','bold'],['textItalic','italic'],['textUnderline','underline']])$(id).setAttribute('aria-pressed',String(toolOptions.text[key]));
   $('textSize').value=toolOptions.text.size;$('opacity').value=Math.round(toolOptions.highlighter.opacity*100);$('opacityValue').textContent=$('opacity').value+'%';
-  $('widthOption').hidden=tool==='text'||tool==='select';$('textSizeOption').hidden=tool!=='text';$('opacityOption').hidden=tool!=='highlighter';$('widthLabel').textContent=tool==='highlighter'?'형광펜 두께':'선 두께';
+  $('widthOption').hidden=tool==='text'||tool==='select';$('opacityOption').hidden=tool!=='highlighter';$('widthLabel').textContent=tool==='highlighter'?'형광펜 두께':'선 두께';
   document.querySelectorAll('#colorSwatches button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.color===options.color)));
 }
 function changeOptions(){
@@ -108,6 +110,7 @@ function changeOptions(){
   toolOptions.highlighter.opacity=Number($('opacity').value)/100;
   $('opacityValue').textContent=$('opacity').value+'%';
   document.querySelectorAll('#colorSwatches button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.color===options.color)));
+  $('textColor').value=toolOptions.text.color;
   if(textDraft)previewText();
 }
 for(const id of ['color','weight','textSize','opacity'])$(id).oninput=changeOptions;
@@ -115,19 +118,34 @@ document.querySelectorAll('[data-tool]').forEach(b=>b.onclick=()=>{finishText(tr
 function positionTextInput(){
   if(!textDraft)return;
   const r=canvas.getBoundingClientRect(),scaleX=r.width/canvas.width,scaleY=r.height/canvas.height;
-  const input=$('inlineText');input.style.left=(r.left+textDraft.point.x*scaleX)+'px';input.style.top=(r.top+textDraft.point.y*scaleY)+'px';
-  input.style.width=Math.max(10,(canvas.width-textDraft.point.x)*scaleX-2)+'px';input.style.height=Math.max(10,(canvas.height-textDraft.point.y)*scaleY-2)+'px';
-  input.style.fontSize=toolOptions.text.size*scaleY+'px';input.style.caretColor=toolOptions.text.color;
+  const input=$('inlineText'),options=toolOptions.text,lines=input.value.split('\n');
+  ctx.save();ctx.font=textFont(options);const measured=Math.max(0,...lines.map(line=>ctx.measureText(line).width));ctx.restore();
+  const left=r.left+textDraft.point.x*scaleX,top=r.top+textDraft.point.y*scaleY;
+  input.style.left=left+'px';input.style.top=top+'px';
+  input.style.width=Math.max(8,Math.min(Math.max(110,measured*scaleX+options.size*scaleX*.65+6),r.right-left-2))+'px';
+  input.style.height=Math.max(8,Math.min(Math.max(options.size*scaleY*1.25+4,lines.length*options.size*scaleY*1.25+4),r.bottom-top-2))+'px';
+  input.style.fontSize=options.size*scaleY+'px';input.style.fontWeight=options.bold?'700':'400';input.style.fontStyle=options.italic?'italic':'normal';input.style.caretColor=options.color;
+  const bar=$('textFormatBar'),barRect=bar.getBoundingClientRect();
+  bar.style.left=Math.max(8,Math.min(left,window.innerWidth-barRect.width-8))+'px';
+  bar.style.top=(top-barRect.height-12>=8?top-barRect.height-12:Math.min(window.innerHeight-barRect.height-8,top+input.getBoundingClientRect().height+12))+'px';
 }
 function previewText(){if(!textDraft)return;ctx.putImageData(textDraft.base,0,0);drawText(ctx,$('inlineText').value,textDraft.point,toolOptions.text);positionTextInput();}
 function finishText(apply){
   if(!textDraft)return;
   const draft=textDraft,value=$('inlineText').value;textDraft=null;
-  $('inlineText').hidden=true;$('textActions').hidden=true;
+  $('inlineText').hidden=true;$('textActions').hidden=true;$('textFormatBar').hidden=true;
   ctx.putImageData(draft.base,0,0);
   if(apply&&value.trim()){checkpoint();drawText(ctx,value,draft.point,toolOptions.text);commit();}else renderGallery();
 }
+$('workspace').addEventListener('pointerdown',event=>{if(event.target===$('workspace')&&textDraft)finishText(true);});
 $('inlineText').oninput=previewText;
+$('textColor').oninput=()=>{$('color').value=$('textColor').value;changeOptions();};
+for(const [id,key] of [['textBold','bold'],['textItalic','italic'],['textUnderline','underline']]){
+  $(id).onmousedown=event=>event.preventDefault();
+  $(id).onclick=()=>{toolOptions.text[key]=!toolOptions.text[key];$(id).setAttribute('aria-pressed',String(toolOptions.text[key]));previewText();$('inlineText').focus();};
+}
+$('inlineText').onpointerdown=event=>{if(event.button===0&&textDraft){event.preventDefault();finishText(true);}};
+
 $('inlineText').onkeydown=e=>{if(e.isComposing)return;if(e.key==='Escape'){e.preventDefault();finishText(false);}else if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();finishText(true);}};
 $('applyText').onclick=()=>finishText(true);$('cancelText').onclick=()=>finishText(false);
 new ResizeObserver(positionTextInput).observe(canvas);$('workspace').addEventListener('scroll',positionTextInput);window.addEventListener('resize',positionTextInput);
@@ -135,9 +153,10 @@ canvas.onpointerdown=e=>{
   if(!current||tool==='select'||e.button!==0)return;
   const p=point(e,canvas);
   if(tool==='text'){
-    finishText(true);textDraft={base:ctx.getImageData(0,0,canvas.width,canvas.height),point:p};
-    $('inlineText').value='';$('inlineText').hidden=false;$('textActions').hidden=false;positionTextInput();$('inlineText').focus();renderGallery();
-    status('이미지 위에 텍스트를 입력하세요. 색상·글자 크기는 실시간 반영됩니다.');return;
+    if(textDraft){finishText(true);return;}
+    textDraft={base:ctx.getImageData(0,0,canvas.width,canvas.height),point:p};
+    $('inlineText').value='';$('inlineText').hidden=false;$('textActions').hidden=false;$('textFormatBar').hidden=false;positionTextInput();$('inlineText').focus();renderGallery();
+    status('텍스트를 입력하고 크기·색상·서식을 조절하세요. 이미지를 다시 클릭하면 입력이 끝납니다.');return;
   }
   checkpoint();drawing={start:p,points:[p],base:ctx.getImageData(0,0,canvas.width,canvas.height),tool,options:{...toolOptions[tool]}};
   canvas.setPointerCapture(e.pointerId);
