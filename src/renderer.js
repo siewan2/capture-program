@@ -7,7 +7,9 @@ if(!Array.isArray(presets)||!presets.length||!presets.every(p=>presetSize(p.widt
 function status(message){$('status').textContent=message;}
 let settings;
 try { settings=JSON.parse(localStorage.getItem('settings')); } catch {}
-settings={magnifier:settings?.magnifier!==false,format:settings?.format==='jpeg'?'jpeg':'png',shortcuts:{region:'Control+Shift+1',window:'Control+Shift+2',fixed:'Control+Shift+3',...settings?.shortcuts}};
+settings={theme:settings?.theme==='dark'?'dark':'light',magnifier:settings?.magnifier!==false,format:settings?.format==='jpeg'?'jpeg':'png',shortcuts:{region:'Control+Shift+1',window:'Control+Shift+2',fixed:'Control+Shift+3',...settings?.shortcuts}};
+document.documentElement.dataset.theme=settings.theme;$('theme').value=settings.theme;
+$('theme').onchange=()=>{settings.theme=$('theme').value;document.documentElement.dataset.theme=settings.theme;persistSettings();$('settingsStatus').textContent='화면 스타일을 저장했습니다.';};
 function persistSettings(){localStorage.setItem('settings',JSON.stringify(settings));}
 function showTab(name){
   finishText(true);
@@ -96,10 +98,10 @@ for(const [name,color] of swatches){const button=document.createElement('button'
 function syncOptions(){
   const options=toolOptions[tool]||toolOptions.pen;
   $('color').value=options.color;$('weight').value=options.width||3;
-  $('textColor').value=toolOptions.text.color;
+  syncTextColor();
   for(const [id,key] of [['textBold','bold'],['textItalic','italic'],['textUnderline','underline']])$(id).setAttribute('aria-pressed',String(toolOptions.text[key]));
   $('textSize').value=toolOptions.text.size;$('opacity').value=Math.round(toolOptions.highlighter.opacity*100);$('opacityValue').textContent=$('opacity').value+'%';
-  $('widthOption').hidden=tool==='text'||tool==='select';$('opacityOption').hidden=tool!=='highlighter';$('widthLabel').textContent=tool==='highlighter'?'형광펜 두께':'선 두께';
+  $('drawingColorOption').hidden=tool==='text';$('widthOption').hidden=tool==='text'||tool==='select';$('opacityOption').hidden=tool!=='highlighter';$('widthLabel').textContent=tool==='highlighter'?'형광펜 두께':'선 두께';
   document.querySelectorAll('#colorSwatches button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.color===options.color)));
 }
 function changeOptions(){
@@ -110,7 +112,7 @@ function changeOptions(){
   toolOptions.highlighter.opacity=Number($('opacity').value)/100;
   $('opacityValue').textContent=$('opacity').value+'%';
   document.querySelectorAll('#colorSwatches button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.color===options.color)));
-  $('textColor').value=toolOptions.text.color;
+  syncTextColor();
   if(textDraft)previewText();
 }
 for(const id of ['color','weight','textSize','opacity'])$(id).oninput=changeOptions;
@@ -133,13 +135,25 @@ function previewText(){if(!textDraft)return;ctx.putImageData(textDraft.base,0,0)
 function finishText(apply){
   if(!textDraft)return;
   const draft=textDraft,value=$('inlineText').value;textDraft=null;
-  $('inlineText').hidden=true;$('textActions').hidden=true;$('textFormatBar').hidden=true;
+  $('inlineText').hidden=true;$('textActions').hidden=true;$('textFormatBar').hidden=true;$('textPalette').hidden=true;$('textColor').setAttribute('aria-expanded','false');
   ctx.putImageData(draft.base,0,0);
   if(apply&&value.trim()){checkpoint();drawText(ctx,value,draft.point,toolOptions.text);commit();}else renderGallery();
 }
 $('workspace').addEventListener('pointerdown',event=>{if(event.target===$('workspace')&&textDraft)finishText(true);});
 $('inlineText').oninput=previewText;
-$('textColor').oninput=()=>{$('color').value=$('textColor').value;changeOptions();};
+function syncTextColor(){
+  $('textColorDot').style.backgroundColor=toolOptions.text.color;
+  document.querySelectorAll('#textPalette button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.color===toolOptions.text.color)));
+}
+const textColors=[['검정','#000000'],['흰색','#ffffff'],['회색','#666666'],['빨강','#ff3030'],['주황','#ff9800'],['노랑','#ffeb3b'],['초록','#159447'],['파랑','#0088ff'],['보라','#8e44ad'],['분홍','#ed4b91']];
+for(const [name,color] of textColors){
+  const button=document.createElement('button');button.type='button';button.dataset.color=color;button.style.backgroundColor=color;button.setAttribute('aria-label','텍스트 '+name);
+  button.onmousedown=event=>event.preventDefault();
+  button.onclick=()=>{$('color').value=color;changeOptions();$('textPalette').hidden=true;$('textColor').setAttribute('aria-expanded','false');$('inlineText').focus({preventScroll:true});};
+  $('textPalette').append(button);
+}
+$('textColor').onmousedown=event=>event.preventDefault();
+$('textColor').onclick=()=>{$('textPalette').hidden=!$('textPalette').hidden;$('textColor').setAttribute('aria-expanded',String(!$('textPalette').hidden));positionTextInput();};
 for(const [id,key] of [['textBold','bold'],['textItalic','italic'],['textUnderline','underline']]){
   $(id).onmousedown=event=>event.preventDefault();
   $(id).onclick=()=>{toolOptions.text[key]=!toolOptions.text[key];$(id).setAttribute('aria-pressed',String(toolOptions.text[key]));previewText();$('inlineText').focus();};
@@ -153,9 +167,11 @@ canvas.onpointerdown=e=>{
   if(!current||tool==='select'||e.button!==0)return;
   const p=point(e,canvas);
   if(tool==='text'){
+    e.preventDefault();
     if(textDraft){finishText(true);return;}
     textDraft={base:ctx.getImageData(0,0,canvas.width,canvas.height),point:p};
-    $('inlineText').value='';$('inlineText').hidden=false;$('textActions').hidden=false;$('textFormatBar').hidden=false;positionTextInput();$('inlineText').focus();renderGallery();
+    $('inlineText').value='';$('inlineText').hidden=false;$('textActions').hidden=false;$('textFormatBar').hidden=false;positionTextInput();const draft=textDraft;$('inlineText').focus({preventScroll:true});renderGallery();
+    requestAnimationFrame(()=>{if(textDraft===draft)$('inlineText').focus({preventScroll:true});});
     status('텍스트를 입력하고 크기·색상·서식을 조절하세요. 이미지를 다시 클릭하면 입력이 끝납니다.');return;
   }
   checkpoint();drawing={start:p,points:[p],base:ctx.getImageData(0,0,canvas.width,canvas.height),tool,options:{...toolOptions[tool]}};
