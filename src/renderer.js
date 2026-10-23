@@ -94,7 +94,7 @@ const toolOptions={
 };
 let textDraft=null;
 const swatches=[['검정','#000000'],['노랑','#ffeb3b'],['초록','#64e572'],['하늘','#43d9ff'],['분홍','#ff77b7'],['주황','#ffad42'],['보라','#b18aff'],['빨강','#ff524f']];
-for(const [name,color] of swatches){const button=document.createElement('button');button.title=name;button.setAttribute('aria-label',name);button.dataset.color=color;button.style.backgroundColor=color;button.onclick=()=>{$('color').value=color;changeOptions();};$('colorSwatches').append(button);}
+for(const [name,color] of swatches){const button=document.createElement('button');button.title=name;button.setAttribute('aria-label',name);button.dataset.color=color;button.style.backgroundColor=color;button.onmousedown=event=>{if(textDraft)event.preventDefault();};button.onclick=()=>{$('color').value=color;changeOptions();if(textDraft)$('inlineText').focus({preventScroll:true});};$('colorSwatches').append(button);}
 function syncOptions(){
   const options=toolOptions[tool]||toolOptions.pen;
   $('color').value=options.color;$('weight').value=options.width||3;
