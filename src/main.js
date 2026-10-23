@@ -1,11 +1,10 @@
-const { app, BrowserWindow, desktopCapturer, ipcMain, dialog, screen, globalShortcut } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, screen, globalShortcut, clipboard, nativeImage } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs/promises');
 const {installOverlayCapture}=require('./capture-overlay');
 const {saveImage} = require('./storage');
 const {applyShortcuts} = require('./shortcuts');
 let main;
-const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 app.whenReady().then(async () => {
   const configPath=path.join(app.getPath('userData'),'save-settings.json');
   let saveDirectory=path.join(app.getPath('pictures'),'Capture Program');
@@ -22,23 +21,18 @@ app.whenReady().then(async () => {
   });
   main = new BrowserWindow({width:1320,height:900,minWidth:980,minHeight:650,backgroundColor:'#111522',webPreferences:{preload:path.join(__dirname,'preload.js'),contextIsolation:true,nodeIntegration:false,sandbox:true}});
   const captureOverlay=installOverlayCapture(main);
-  ipcMain.handle('capture-overlay',(_,mode,preset)=>captureOverlay(mode,preset));
+  ipcMain.handle('capture-overlay',(_,mode,preset,options)=>captureOverlay(mode,preset,options));
+  ipcMain.handle('copy-image',(_,data)=>{
+    if(typeof data!=='string'||!/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(data))throw new Error('잘못된 이미지입니다.');
+    const image=nativeImage.createFromDataURL(data);if(image.isEmpty())throw new Error('이미지를 읽지 못했습니다.');
+    clipboard.writeImage(image);return true;
+  });
   main.loadFile(path.join(__dirname,'index.html'));
   ipcMain.handle('shortcuts', (_, shortcuts) => applyShortcuts(globalShortcut, shortcuts, mode => {
     main.webContents.send('capture-shortcut', mode);
   }));
   main.webContents.setWindowOpenHandler(() => ({action:'deny'}));
   main.webContents.on('will-navigate', event => event.preventDefault());
-  ipcMain.handle('sources', async (_, type) => {
-    const displays = screen.getAllDisplays();
-    const size = type === 'screen' ? {width:Math.max(...displays.map(d=>Math.round(d.size.width*d.scaleFactor))),height:Math.max(...displays.map(d=>Math.round(d.size.height*d.scaleFactor)))} : {width:7680,height:4320};
-    main.hide();
-    try {
-      await delay(350);
-      const sources = await desktopCapturer.getSources({types:[type],thumbnailSize:size});
-      return sources.filter(s=>!s.thumbnail.isEmpty() && s.name !== 'Capture Program').map(s=>({id:s.id,name:s.name,image:s.thumbnail.toDataURL(),width:s.thumbnail.getSize().width,height:s.thumbnail.getSize().height}));
-    } finally { main.show(); }
-  });
   ipcMain.handle('save', async (_, payload) => { await saveImage(saveDirectory,payload); return true; });
 });
 app.on('window-all-closed',()=>{if(process.platform!=='darwin')app.quit();});

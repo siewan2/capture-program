@@ -12,9 +12,9 @@ function setup(){
     setAlwaysOnTop(){}setMenuBarVisibility(){}showInactive(){}focus(){}async loadFile(){}
   }
   const main=new EventEmitter();Object.assign(main,{hide(){hidden=true;},show(){shown=true;},focus(){},isMinimized(){return false;},isDestroyed(){return false;}});
-  const electron={BrowserWindow:Window,screen:{getAllDisplays:()=>displays,getDisplayNearestPoint:()=>displays[0],getCursorScreenPoint:()=>({x:-100,y:100}),on(){}},ipcMain:{handle:(name,fn)=>handlers[name]=fn,on:(name,fn)=>events[name]=fn},desktopCapturer:{async getSources(){assert.equal(hidden,true);return displays.map(d=>({display_id:String(d.id),thumbnail:{isEmpty:()=>false,getSize:()=>({width:1920,height:1080}),toDataURL:()=>`display-${d.id}`,crop(rect){cropped={id:d.id,rect};return{toDataURL:()=>`cropped-${d.id}`};}}}));}}};
+  const electron={BrowserWindow:Window,screen:{dipToScreenRect:(_,bounds)=>({...bounds,x:bounds.x*1.5,y:bounds.y*1.5,width:bounds.width*1.5,height:bounds.height*1.5}),getAllDisplays:()=>displays,getDisplayNearestPoint:()=>displays[0],getCursorScreenPoint:()=>({x:-100,y:100}),on(){}},ipcMain:{handle:(name,fn)=>handlers[name]=fn,on:(name,fn)=>events[name]=fn},desktopCapturer:{async getSources(options){assert.equal(hidden,true);if(options.types[0]==='window')return[{id:'window:123:0',name:'Example',thumbnail:{isEmpty:()=>false,toDataURL:()=> 'full-window-image'}}];return displays.map(d=>({display_id:String(d.id),thumbnail:{isEmpty:()=>false,getSize:()=>({width:1920,height:1080}),toDataURL:()=>`display-${d.id}`,crop(rect){cropped={id:d.id,rect};return{toDataURL:()=>`cropped-${d.id}`};}}}));}}};
   const module={exports:{}};
-  vm.runInNewContext(fs.readFileSync(require.resolve('../src/capture-overlay'),'utf8'),{require:name=>name==='electron'?electron:name==='./geometry'?require('../src/geometry'):require(name),module,__dirname:require('node:path').resolve('src'),setTimeout:fn=>{fn();}});
+  vm.runInNewContext(fs.readFileSync(require.resolve('../src/capture-overlay'),'utf8'),{require:name=>name==='electron'?electron:name==='./geometry'?require('../src/geometry'):name==='./windows-native'?{localWindows:require('../src/windows-native').localWindows,listWindows:async()=>[{handle:'123',x:50,y:50,width:600,height:400}]}:require(name),module,__dirname:require('node:path').resolve('src'),setTimeout:fn=>{fn();}});
   return{capture:module.exports.installOverlayCapture(main),handlers,events,windows,get shown(){return shown;},get cropped(){return cropped;}};
 }
 async function ready(state){for(let i=0;i<20&&state.windows.length<2;i++)await Promise.resolve();assert.equal(state.windows.length,2);}
@@ -30,4 +30,12 @@ test('overlay blocks concurrent sessions, ignores unrelated IPC and restores app
   assert.equal(await s.capture('region'),null);
   s.events['overlay-cancel']({sender:{}});assert.ok(s.windows.every(w=>!w.destroyed));
   s.events['overlay-cancel']({sender:s.windows[1].webContents});assert.equal(await result,null);assert.equal(s.shown,true);assert.ok(s.windows.every(w=>w.destroyed));
+});
+
+test('window mode validates selected native window id and returns whole window thumbnail',async()=>{
+  const s=setup(),result=s.capture('window');await ready(s);
+  const sender=s.windows[1].webContents;
+  const init=s.handlers['overlay-init']({sender});assert.equal(init.mode,'window');assert.equal(init.targets[0].id,'window:123:0');
+  s.events['overlay-select']({sender},{windowId:'window:invalid:0'});assert.ok(s.windows.every(w=>!w.destroyed));
+  s.events['overlay-select']({sender},{windowId:'window:123:0'});assert.equal(await result,'full-window-image');assert.equal(s.shown,true);
 });

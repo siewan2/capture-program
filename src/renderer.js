@@ -7,13 +7,15 @@ if(!Array.isArray(presets)||!presets.length||!presets.every(p=>presetSize(p.widt
 function status(message){$('status').textContent=message;}
 let settings;
 try { settings=JSON.parse(localStorage.getItem('settings')); } catch {}
-settings={format:settings?.format==='jpeg'?'jpeg':'png',shortcuts:{region:'Control+Shift+1',window:'Control+Shift+2',fixed:'Control+Shift+3',...settings?.shortcuts}};
+settings={magnifier:settings?.magnifier!==false,format:settings?.format==='jpeg'?'jpeg':'png',shortcuts:{region:'Control+Shift+1',window:'Control+Shift+2',fixed:'Control+Shift+3',...settings?.shortcuts}};
 function persistSettings(){localStorage.setItem('settings',JSON.stringify(settings));}
 function showTab(name){
   finishText(true);
   $('capturePanel').hidden=name!=='capture';$('settingsPanel').hidden=name!=='settings';
   for(const tab of ['capture','settings']){ $(tab+'Tab').classList.toggle('active',name===tab);$(tab+'Tab').setAttribute('aria-selected',String(name===tab)); }
 }
+$('magnifierEnabled').checked=settings.magnifier;
+$('magnifierEnabled').onchange=()=>{settings.magnifier=$('magnifierEnabled').checked;persistSettings();$('settingsStatus').textContent='돋보기 설정을 저장했습니다.';};
 $('captureTab').onclick=()=>showTab('capture');$('settingsTab').onclick=()=>showTab('settings');
 function updateFormat(){ $('save').textContent=settings.format.toUpperCase()+' 저장 ↗';$('imageFormat').value=settings.format; }
 updateFormat();$('imageFormat').onchange=()=>{settings.format=$('imageFormat').value;persistSettings();updateFormat();$('settingsStatus').textContent='저장 형식을 저장했습니다.';};
@@ -78,25 +80,12 @@ async function begin(mode){
   if(busy||document.querySelector('dialog[open]'))return;
   finishText(true);busy=true;
   try{
-    if(mode!=='window'){
-      const preset=presets[Number($('presets').value)];
-      const data=await window.captureAPI.captureOverlay(mode,preset);
-      if(data){showTab('capture');addCapture(data);}else status('캡처를 취소했습니다.');
-      return;
-    }
-    status('창을 가져오는 중…');
-    const sources=await window.captureAPI.sources('window');
-    if(!sources.length){status('캡처 가능한 창이 없습니다.');return;}
-    $('pickerTitle').textContent='캡처할 창 선택';
-    $('sources').replaceChildren(...sources.map(source=>{
-      const b=document.createElement('button'),img=document.createElement('img'),label=document.createElement('span');
-      img.src=source.image;label.textContent=source.name;b.append(img,label);
-      b.onclick=()=>{$('picker').close();addCapture(source.image);};return b;
-    }));
-    $('picker').showModal();status('캡처할 창을 선택하세요.');
+    const preset=presets[Number($('presets').value)];
+    const data=await window.captureAPI.captureOverlay(mode,preset,{magnifier:settings.magnifier});
+    if(data){showTab('capture');addCapture(data);}else status('캡처를 취소했습니다.');
   }catch(error){status(`캡처 실패: ${error.message}`);}finally{busy=false;}
 }
-$('region').onclick=()=>begin('region');$('window').onclick=()=>begin('window');$('fixed').onclick=()=>begin('fixed');$('closePicker').onclick=()=>$('picker').close();
+$('region').onclick=()=>begin('region');$('window').onclick=()=>begin('window');$('fixed').onclick=()=>begin('fixed');
 const toolOptions={
   pen:{color:'#ff524f',width:3},highlighter:{color:'#ffeb3b',width:28,opacity:0.35},
   rect:{color:'#ff524f',width:3},ellipse:{color:'#ff524f',width:3},text:{color:'#ff524f',size:32}
@@ -122,7 +111,7 @@ function changeOptions(){
   if(textDraft)previewText();
 }
 for(const id of ['color','weight','textSize','opacity'])$(id).oninput=changeOptions;
-document.querySelectorAll('[data-tool]').forEach(b=>b.onclick=()=>{finishText(true);tool=b.dataset.tool;document.querySelectorAll('[data-tool]').forEach(x=>x.classList.toggle('active',x===b));canvas.style.cursor=tool==='select'?'default':'crosshair';syncOptions();});
+document.querySelectorAll('[data-tool]').forEach(b=>b.onclick=()=>{finishText(true);tool=b.dataset.tool;document.querySelectorAll('[data-tool]').forEach(x=>x.classList.toggle('active',x===b));canvas.style.cursor=tool==='text'?'text':tool==='select'?'default':'crosshair';syncOptions();});
 function positionTextInput(){
   if(!textDraft)return;
   const r=canvas.getBoundingClientRect(),scaleX=r.width/canvas.width,scaleY=r.height/canvas.height;
@@ -203,3 +192,12 @@ $('chooseSaveDirectory').onclick=async()=>{
 };
 loadDirectory();
 renderGallery();
+
+document.addEventListener('keydown',async event=>{
+  const target=event.target;
+  if(!(event.ctrlKey||event.metaKey)||event.key.toLowerCase()!=='c'||event.altKey||event.shiftKey||event.repeat)return;
+  if(target.closest('input,textarea,[contenteditable="true"]')||document.querySelector('dialog[open]')||$('capturePanel').hidden||!current)return;
+  event.preventDefault();finishText(true);
+  try{await window.captureAPI.copyImage(current.data);status('선택한 이미지를 클립보드에 복사했습니다.');}
+  catch(error){status('이미지 복사 실패: '+error.message);}
+});

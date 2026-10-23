@@ -1,5 +1,6 @@
 const {BrowserWindow,desktopCapturer,screen,ipcMain}=require('electron');
 const path=require('node:path');
+const {listWindows,localWindows}=require('./windows-native');
 const {pixelRect,presetSize}=require('./geometry');
 let active=null;
 function installOverlayCapture(main){
@@ -9,6 +10,12 @@ function installOverlayCapture(main){
     const entry=active?.windows.find(entry=>entry.window.webContents===event.sender);
     if(!entry)return;
     try{
+      if(entry.init.mode==='window'){
+        if(!entry.init.targets.some(target=>target.id===rect?.windowId))throw new Error('선택할 수 없는 창입니다.');
+        const source=active.windowSources.find(source=>source.id===rect.windowId);
+        if(!source||source.thumbnail.isEmpty())throw new Error('이 창을 캡처하지 못했습니다.');
+        active.finish(source.thumbnail.toDataURL());return;
+      }
       const crop=pixelRect(rect,entry.init.bounds,entry.image.getSize());
       active.finish(entry.image.crop(crop).toDataURL());
     }catch(error){entry.window.webContents.send('overlay-error',error.message);}
@@ -16,9 +23,9 @@ function installOverlayCapture(main){
   main.on('closed',()=>active?.finish(null));
   screen.on('display-removed',()=>active?.finish(null));
   screen.on('display-metrics-changed',()=>active?.finish(null));
-  return async function capture(mode,preset){
+  return async function capture(mode,preset,options={}){
     if(active) return null;
-    if(!['region','fixed'].includes(mode))throw new Error('잘못된 캡처 방식입니다.');
+    if(!['region','fixed','window'].includes(mode))throw new Error('잘못된 캡처 방식입니다.');
     if(mode==='fixed'&&!presetSize(preset?.width,preset?.height))throw new Error('잘못된 캡처 크기입니다.');
     let resolveResult;
     const result=new Promise(resolve=>{resolveResult=resolve;});
@@ -35,14 +42,23 @@ function installOverlayCapture(main){
       await new Promise(resolve=>setTimeout(resolve,250));
       if(active!==session)return result;
       const displays=screen.getAllDisplays();
-      const sources=await desktopCapturer.getSources({types:['screen'],thumbnailSize:{width:Math.max(...displays.map(d=>Math.ceil(d.bounds.width*d.scaleFactor))),height:Math.max(...displays.map(d=>Math.ceil(d.bounds.height*d.scaleFactor)))}});
+      const thumbnailSize={width:Math.max(...displays.map(d=>Math.ceil(d.bounds.width*d.scaleFactor))),height:Math.max(...displays.map(d=>Math.ceil(d.bounds.height*d.scaleFactor)))};
+      const [sources,windowSources,nativeWindows]=await Promise.all([
+        desktopCapturer.getSources({types:['screen'],thumbnailSize}),
+        mode==='window'?desktopCapturer.getSources({types:['window'],thumbnailSize:{width:7680,height:4320}}):[],
+        mode==='window'?listWindows():[]
+      ]);
+      session.windowSources=windowSources;
+      if(mode==='window'&&!nativeWindows.some(w=>windowSources.some(s=>s.id.split(':')[1]===w.handle&&!s.thumbnail.isEmpty())))throw new Error('선택할 수 있는 창이 없습니다.');
       if(active!==session)return result;
       const cursorDisplay=screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
       for(const display of displays){
         const source=sources.find(s=>s.display_id===String(display.id));
         if(!source||source.thumbnail.isEmpty())throw new Error('화면을 가져오지 못했습니다. 모니터 연결과 화면 캡처 권한을 확인하세요.');
         const window=new BrowserWindow({...display.bounds,show:false,frame:false,transparent:false,backgroundColor:'#000000',alwaysOnTop:true,skipTaskbar:true,resizable:false,movable:false,hasShadow:false,enableLargerThanScreen:true,webPreferences:{preload:path.join(__dirname,'overlay-preload.js'),contextIsolation:true,nodeIntegration:false,sandbox:true}});
-        const entry={window,image:source.thumbnail,init:{mode,preset,bounds:{width:display.bounds.width,height:display.bounds.height},image:source.thumbnail.toDataURL(),imageSize:source.thumbnail.getSize()}};
+        const nativeBounds=mode==='window'?screen.dipToScreenRect(null,display.bounds):null;
+        const targets=mode==='window'?localWindows(nativeWindows,windowSources,display,nativeBounds):[];
+        const entry={window,image:source.thumbnail,init:{mode,preset,magnifier:options?.magnifier!==false,targets,bounds:{width:display.bounds.width,height:display.bounds.height},image:source.thumbnail.toDataURL(),imageSize:source.thumbnail.getSize()}};
         session.windows.push(entry);
         window.setAlwaysOnTop(true,'screen-saver');
         window.setMenuBarVisibility(false);
