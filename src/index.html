@@ -14,6 +14,5 @@
 </div><div class="setting-card"><h2>지정 크기 프리셋</h2><p>너비와 높이는 원본 화면 픽셀 기준입니다. 캡처 탭에서 사용할 크기를 선택하세요.</p><select id="settingsPresets" aria-label="관리할 크기 프리셋"></select><div class="sizes"><input id="pw" type="number" min="1" max="16384" placeholder="너비" aria-label="프리셋 너비"><span>×</span><input id="ph" type="number" min="1" max="16384" placeholder="높이" aria-label="프리셋 높이"></div><div class="row"><button id="addPreset">추가</button><button id="removePreset">삭제</button></div><small id="presetStatus" role="status"></small></div>
 <p id="settingsStatus" role="status"></p></section>
 <dialog id="picker"><h2 id="pickerTitle">캡처할 화면 선택</h2><div id="sources"></div><button id="closePicker">취소</button></dialog>
-<dialog id="cropDialog"><h2 id="cropTitle">마우스로 캡처 영역을 드래그하세요</h2><div id="cropWrap"><canvas id="crop"></canvas></div><div class="row"><button id="cancelCrop">취소</button><button id="confirmCrop" class="primary">선택 영역 캡처</button></div></dialog>
 <dialog id="textDialog"><form method="dialog"><h2>텍스트 추가</h2><input id="textInput" maxlength="500" placeholder="넣을 텍스트" aria-label="넣을 텍스트"><div class="row"><button value="cancel">취소</button><button value="ok" class="primary">추가</button></div></form></dialog>
 <script src="geometry.js"></script><script src="renderer.js"></script></body></html>

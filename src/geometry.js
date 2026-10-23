@@ -8,4 +8,13 @@ function selection(a, b, width, height) {
 function presetSize(width, height) {
   return Number.isInteger(width) && Number.isInteger(height) && width > 0 && height > 0 && width <= 16384 && height <= 16384;
 }
-if (typeof module !== 'undefined') module.exports = {selection, presetSize};
+function pixelRect(rect,bounds,imageSize){
+  if(!rect||![rect.x,rect.y,rect.width,rect.height].every(Number.isFinite)||rect.width<=0||rect.height<=0)throw new Error('영역을 다시 선택하세요.');
+  const scaleX=imageSize.width/bounds.width,scaleY=imageSize.height/bounds.height;
+  const x=Math.max(0,Math.min(imageSize.width-1,Math.round(rect.x*scaleX)));
+  const y=Math.max(0,Math.min(imageSize.height-1,Math.round(rect.y*scaleY)));
+  const width=Math.min(imageSize.width-x,Math.max(1,Math.round(rect.width*scaleX)));
+  const height=Math.min(imageSize.height-y,Math.max(1,Math.round(rect.height*scaleY)));
+  return{x,y,width,height};
+}
+if (typeof module !== 'undefined') module.exports = {selection, presetSize, pixelRect};

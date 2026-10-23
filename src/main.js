@@ -1,6 +1,7 @@
 const { app, BrowserWindow, desktopCapturer, ipcMain, dialog, screen, globalShortcut } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs/promises');
+const {installOverlayCapture}=require('./capture-overlay');
 const {saveImage} = require('./storage');
 const {applyShortcuts} = require('./shortcuts');
 let main;
@@ -20,10 +21,10 @@ app.whenReady().then(async () => {
     return saveDirectory;
   });
   main = new BrowserWindow({width:1320,height:900,minWidth:980,minHeight:650,backgroundColor:'#111522',webPreferences:{preload:path.join(__dirname,'preload.js'),contextIsolation:true,nodeIntegration:false,sandbox:true}});
+  const captureOverlay=installOverlayCapture(main);
+  ipcMain.handle('capture-overlay',(_,mode,preset)=>captureOverlay(mode,preset));
   main.loadFile(path.join(__dirname,'index.html'));
   ipcMain.handle('shortcuts', (_, shortcuts) => applyShortcuts(globalShortcut, shortcuts, mode => {
-    if (main.isMinimized()) main.restore();
-    main.show();
     main.webContents.send('capture-shortcut', mode);
   }));
   main.webContents.setWindowOpenHandler(() => ({action:'deny'}));

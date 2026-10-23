@@ -1,7 +1,6 @@
 const $ = id => document.getElementById(id);
 const canvas=$('editor'), ctx=canvas.getContext('2d');
-const crop=$('crop'), cropCtx=crop.getContext('2d');
-let captures=[], current=null, tool='select', drawing=null, cropImage=null, cropStart=null, cropRect=null, captureMode='region', busy=false;
+let captures=[], current=null, tool='select', drawing=null, busy=false;
 let presets;
 try {presets=JSON.parse(localStorage.getItem('presets'));} catch {}
 if(!Array.isArray(presets)||!presets.length||!presets.every(p=>presetSize(p.width,p.height))) presets=[{width:640,height:480},{width:1280,height:720},{width:1920,height:1080}];
@@ -74,12 +73,29 @@ function checkpoint(){current.history.push(current.data);if(current.history.leng
 function commit(){current.data=canvas.toDataURL('image/png');current.width=canvas.width;current.height=canvas.height;renderGallery();}
 function addCapture(data){const item={data,name:`캡처 ${new Date().toLocaleTimeString('ko-KR')}`,history:[]};captures.unshift(item);openItem(item);}
 function point(event,target){const r=target.getBoundingClientRect();return{x:Math.max(0,Math.min(target.width,(event.clientX-r.left)*target.width/r.width)),y:Math.max(0,Math.min(target.height,(event.clientY-r.top)*target.height/r.height))};}
-async function begin(mode){if(busy||document.querySelector('dialog[open]'))return;busy=true;captureMode=mode;try{status('화면을 가져오는 중…');const sources=await window.captureAPI.sources(mode==='window'?'window':'screen');if(!sources.length){status('캡처 가능한 화면이 없습니다. 최소화된 창과 보호된 콘텐츠는 캡처할 수 없습니다.');return;}$('pickerTitle').textContent=mode==='window'?'캡처할 창 선택':'캡처할 모니터 선택';$('sources').replaceChildren(...sources.map(source=>{const b=document.createElement('button'),img=document.createElement('img'),label=document.createElement('span');img.src=source.image;label.textContent=source.name;b.append(img,label);b.onclick=async()=>{$('picker').close();if(mode==='window'){addCapture(source.image);return;}cropImage=await loadImage(source.image);crop.width=cropImage.width;crop.height=cropImage.height;cropRect=null;cropStart=null;paintCrop();$('confirmCrop').disabled=true;$('cropTitle').textContent=mode==='fixed'?'원하는 위치를 클릭하세요 · 크기는 원본 화면 픽셀 기준':'마우스로 캡처 영역을 드래그하세요';$('cropDialog').showModal();};return b;}));$('picker').showModal();status('화면 또는 창을 선택하세요.');}catch(error){status(`캡처 실패: ${error.message}`);}finally{busy=false;}}
-$('region').onclick=()=>begin('region');$('window').onclick=()=>begin('window');$('fixed').onclick=()=>begin('fixed');$('closePicker').onclick=()=>$('picker').close();$('cancelCrop').onclick=()=>$('cropDialog').close();
-function paintCrop(){cropCtx.clearRect(0,0,crop.width,crop.height);cropCtx.drawImage(cropImage,0,0);cropCtx.fillStyle='#0008';cropCtx.fillRect(0,0,crop.width,crop.height);if(cropRect){const r=cropRect;cropCtx.drawImage(cropImage,r.x,r.y,r.width,r.height,r.x,r.y,r.width,r.height);cropCtx.strokeStyle='#a99bff';cropCtx.lineWidth=3;cropCtx.strokeRect(r.x,r.y,r.width,r.height);}}
-crop.onpointerdown=e=>{crop.setPointerCapture(e.pointerId);cropStart=point(e,crop);if(captureMode==='fixed'){const p=presets[Number($('presets').value)];if(p.width>crop.width||p.height>crop.height){status('이 프리셋은 선택한 모니터보다 큽니다. 더 작은 크기를 선택하세요.');return;}cropRect={x:Math.round(Math.min(cropStart.x,crop.width-p.width)),y:Math.round(Math.min(cropStart.y,crop.height-p.height)),width:p.width,height:p.height};paintCrop();$('confirmCrop').disabled=false;}};
-crop.onpointermove=e=>{if(!cropStart||captureMode==='fixed')return;cropRect=selection(cropStart,point(e,crop),crop.width,crop.height);paintCrop();$('confirmCrop').disabled=cropRect.width<1||cropRect.height<1;};crop.onpointerup=()=>{cropStart=null;};crop.onpointercancel=()=>{cropStart=null;};
-$('confirmCrop').onclick=()=>{if(!cropRect||cropRect.width<1||cropRect.height<1)return;const r=cropRect,c=document.createElement('canvas');c.width=Math.round(r.width);c.height=Math.round(r.height);c.getContext('2d').drawImage(cropImage,r.x,r.y,r.width,r.height,0,0,c.width,c.height);addCapture(c.toDataURL());$('cropDialog').close();};
+async function begin(mode){
+  if(busy||document.querySelector('dialog[open]'))return;
+  busy=true;
+  try{
+    if(mode!=='window'){
+      const preset=presets[Number($('presets').value)];
+      const data=await window.captureAPI.captureOverlay(mode,preset);
+      if(data){showTab('capture');addCapture(data);}else status('캡처를 취소했습니다.');
+      return;
+    }
+    status('창을 가져오는 중…');
+    const sources=await window.captureAPI.sources('window');
+    if(!sources.length){status('캡처 가능한 창이 없습니다.');return;}
+    $('pickerTitle').textContent='캡처할 창 선택';
+    $('sources').replaceChildren(...sources.map(source=>{
+      const b=document.createElement('button'),img=document.createElement('img'),label=document.createElement('span');
+      img.src=source.image;label.textContent=source.name;b.append(img,label);
+      b.onclick=()=>{$('picker').close();addCapture(source.image);};return b;
+    }));
+    $('picker').showModal();status('캡처할 창을 선택하세요.');
+  }catch(error){status(`캡처 실패: ${error.message}`);}finally{busy=false;}
+}
+$('region').onclick=()=>begin('region');$('window').onclick=()=>begin('window');$('fixed').onclick=()=>begin('fixed');$('closePicker').onclick=()=>$('picker').close();
 document.querySelectorAll('[data-tool]').forEach(b=>b.onclick=()=>{tool=b.dataset.tool;document.querySelectorAll('[data-tool]').forEach(x=>x.classList.toggle('active',x===b));canvas.style.cursor=tool==='select'?'default':'crosshair';});
 function style(){ctx.strokeStyle=$('color').value;ctx.fillStyle=$('color').value;ctx.lineWidth=Number($('weight').value);ctx.lineCap='round';ctx.lineJoin='round';}
 canvas.onpointerdown=e=>{if(!current||tool==='select')return;const p=point(e,canvas);if(tool==='text'){$('textInput').value='';$('textDialog').showModal();$('textInput').focus();$('textDialog').onclose=()=>{if($('textDialog').returnValue!=='ok'||!$('textInput').value)return;checkpoint();style();ctx.font=`${Number($('weight').value)*4+16}px "Segoe UI"`;ctx.fillText($('textInput').value,p.x,p.y);commit();};return;}checkpoint();style();drawing={start:p,last:p,base:ctx.getImageData(0,0,canvas.width,canvas.height),tool};canvas.setPointerCapture(e.pointerId);if(tool==='pen'){ctx.beginPath();ctx.arc(p.x,p.y,ctx.lineWidth/2,0,Math.PI*2);ctx.fill();}};
