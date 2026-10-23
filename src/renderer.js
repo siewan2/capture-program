@@ -112,7 +112,7 @@ window.addEventListener('keydown',event=>{if(event.key==='Control')controlDown=t
 window.addEventListener('blur',()=>{controlDown=false;endZoom();});
 function checkpoint(){current.history.push({data:current.data,baseData:current.baseData});if(current.history.length>20)current.history.shift();}
 function commit(){applyViewScale();current.data=canvas.toDataURL('image/png');current.width=canvas.width;current.height=canvas.height;renderGallery();}
-function addCapture(data){const item={id:crypto.randomUUID(),data,originalData:data,baseData:data,name:`캡처 ${new Date().toLocaleTimeString('ko-KR')}`,history:[]};captures.unshift(item);openItem(item);}
+function addCapture(data){const item={id:crypto.randomUUID(),data,originalData:data,baseData:data,name:`캡처 ${new Date().toLocaleTimeString('ko-KR')}`,history:[]};captures.unshift(item);return openItem(item);}
 function point(event,target){const r=target.getBoundingClientRect();return{x:Math.max(0,Math.min(target.width,(event.clientX-r.left)*target.width/r.width)),y:Math.max(0,Math.min(target.height,(event.clientY-r.top)*target.height/r.height))};}
 async function begin(mode){
   if(busy||saving||document.querySelector('dialog[open]'))return;
@@ -121,7 +121,7 @@ async function begin(mode){
     const preset=presets[Number($('presets').value)];
     const data=await window.captureAPI.captureOverlay(mode,preset,{magnifier:settings.magnifier,presets});
     if(data){
-      showTab('capture');addCapture(data);
+      showTab('capture');await addCapture(data);
       try{await window.captureAPI.copyImage(data);status('캡처 이미지를 클립보드에 복사했습니다.');}
       catch(error){status(`캡처 완료 · 클립보드 복사 실패: ${error.message}`);}
     }else status('캡처를 취소했습니다.');
