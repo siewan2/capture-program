@@ -1,6 +1,6 @@
 const $ = id => document.getElementById(id);
 const canvas=$('editor'), ctx=canvas.getContext('2d');
-let originalCanvas=null,imageRevision=0,loadingImage=false;
+let originalCanvas=null,imageRevision=0,loadingImage=false,zoomDrag=null;
 let captures=[], current=null, tool='select', drawing=null, freeform=null, busy=false;
 let presets;
 try {presets=JSON.parse(localStorage.getItem('presets'));} catch {}
@@ -80,12 +80,21 @@ async function openItem(item){
     const [img,base]=await Promise.all([loadImage(item.data),loadImage(item.baseData)]);if(current!==item||revision!==imageRevision)return;
     item.width=img.width;item.height=img.height;canvas.width=img.width;canvas.height=img.height;ctx.drawImage(img,0,0);
     originalCanvas=document.createElement('canvas');originalCanvas.width=base.width;originalCanvas.height=base.height;originalCanvas.getContext('2d').drawImage(base,0,0);
-    canvas.hidden=false;$('empty').hidden=true;status(`${item.name} · ${img.width} × ${img.height} px`);
+    canvas.hidden=false;$('empty').hidden=true;applyViewScale();status(`${item.name} · ${img.width} × ${img.height} px`);
   }catch(error){if(revision===imageRevision)status('이미지 열기 실패: '+error.message);}
   finally{if(revision===imageRevision){loadingImage=false;renderGallery();}}
 }
+function applyViewScale(){
+  if(!current||canvas.hidden)return;
+  const area=$('workspace'),fit=Math.min(1,(area.clientWidth-24)/canvas.width,(area.clientHeight-24)/canvas.height);
+  const scale=Math.max(.01,fit)*(current.viewZoom||1);
+  canvas.style.width=canvas.width*scale+'px';canvas.style.height=canvas.height*scale+'px';canvas.style.maxWidth='none';canvas.style.maxHeight='none';
+  positionTextInput();
+}
+new ResizeObserver(applyViewScale).observe($('workspace'));
+function endZoom(){if(!zoomDrag)return;zoomDrag=null;canvas.style.cursor=tool==='text'?'text':tool==='select'?'default':'crosshair';}
 function checkpoint(){current.history.push({data:current.data,baseData:current.baseData});if(current.history.length>20)current.history.shift();}
-function commit(){current.data=canvas.toDataURL('image/png');current.width=canvas.width;current.height=canvas.height;renderGallery();}
+function commit(){applyViewScale();current.data=canvas.toDataURL('image/png');current.width=canvas.width;current.height=canvas.height;renderGallery();}
 function addCapture(data){const item={id:crypto.randomUUID(),data,originalData:data,baseData:data,name:`캡처 ${new Date().toLocaleTimeString('ko-KR')}`,history:[]};captures.unshift(item);openItem(item);}
 function point(event,target){const r=target.getBoundingClientRect();return{x:Math.max(0,Math.min(target.width,(event.clientX-r.left)*target.width/r.width)),y:Math.max(0,Math.min(target.height,(event.clientY-r.top)*target.height/r.height))};}
 async function begin(mode){
@@ -218,7 +227,9 @@ document.addEventListener('keydown',event=>{
   if(event.key==='Backspace'){event.preventDefault();freeform.points.pop();if(!freeform.points.length)finishFreeform(false);else{freeform.hover=null;paintFreeform();}}
 });
 canvas.onpointerdown=e=>{
-  if(!current||loadingImage||tool==='select'||e.button!==0)return;
+  if(!current||loadingImage||e.button!==0)return;
+  if(tool==='select'&&!e.ctrlKey)return;
+  if(e.ctrlKey){e.preventDefault();finishText(true);finishFreeform(true);zoomDrag={y:e.clientY,zoom:current.viewZoom||1};canvas.setPointerCapture(e.pointerId);canvas.style.cursor='ns-resize';return;}
   const p=point(e,canvas);
   if(tool==='text'){
     e.preventDefault();
@@ -235,6 +246,7 @@ canvas.onpointerdown=e=>{
   if(tool==='pen'||tool==='highlighter')drawStroke(ctx,[p],{...drawing.options,highlight:tool==='highlighter'});
 };
 canvas.onpointermove=e=>{
+  if(zoomDrag){current.viewZoom=Math.max(.1,Math.min(8,zoomDrag.zoom*Math.exp((zoomDrag.y-e.clientY)/180)));applyViewScale();status(`보기 확대 ${Math.round(current.viewZoom*100)}% · Ctrl+위로 드래그: 확대 / 아래로: 축소`);return;}
   if(tool==='freeform'&&freeform){const p=point(e,canvas);if(freeform.dragging&&(e.buttons&1)){if(Math.hypot(p.x-freeform.points.at(-1).x,p.y-freeform.points.at(-1).y)>2)freeform.points.push(p);}freeform.hover=p;paintFreeform();return;}
   if(!drawing)return;
   const p=point(e,canvas),options=drawing.options;if(drawing.tool!=='eraser')ctx.putImageData(drawing.base,0,0);
@@ -258,7 +270,7 @@ function eraseStroke(stroke){
   restorePixels(output.data,original.data,m.getImageData(0,0,mask.width,mask.height).data);ctx.putImageData(output,left,top);
 }
 function rotateCanvas(source){const result=document.createElement('canvas');result.width=source.height;result.height=source.width;const c=result.getContext('2d');c.translate(result.width,0);c.rotate(Math.PI/2);c.drawImage(source,0,0);return result;}
-function finishDrawing(){if(freeform)freeform.dragging=false;if(drawing){drawing=null;commit();}}canvas.onpointerup=finishDrawing;canvas.onpointercancel=finishDrawing;
+function finishDrawing(){if(zoomDrag){endZoom();return;}if(freeform)freeform.dragging=false;if(drawing){drawing=null;commit();}}canvas.onpointerup=finishDrawing;canvas.onpointercancel=finishDrawing;
 syncOptions();
 $('undo').onclick=()=>{if(freeform){finishFreeform(false);return;}if(textDraft){finishText(false);return;}if(!current?.history.length)return;const previous=current.history.pop();current.data=previous.data;current.baseData=previous.baseData;openItem(current);};
 $('rotate').onclick=()=>{
@@ -266,7 +278,7 @@ $('rotate').onclick=()=>{
   const rotated=rotateCanvas(canvas);originalCanvas=rotateCanvas(originalCanvas);current.baseData=originalCanvas.toDataURL();
   canvas.width=rotated.width;canvas.height=rotated.height;ctx.drawImage(rotated,0,0);commit();
 };
-$('reset').onclick=()=>{finishText(false);finishFreeform(false);if(!current)return;checkpoint();current.data=current.originalData;current.baseData=current.originalData;openItem(current);};
+$('reset').onclick=()=>{finishText(false);finishFreeform(false);if(!current)return;checkpoint();current.data=current.originalData;current.baseData=current.originalData;current.viewZoom=1;openItem(current);};
 function deleteItem(item){
   if(current===item){finishText(false);finishFreeform(false);}
   const index=captures.indexOf(item);if(index<0)return;captures.splice(index,1);
@@ -291,7 +303,7 @@ async function saveItems(items,all=false){
     if(all){token=await window.captureAPI.chooseBatchFolder();if(!token){status('모두 저장을 취소했습니다.');return;}}
     for(const [index,item] of snapshots.entries()){
       status(`저장 중… ${index+1} / ${snapshots.length}`);
-      try{const data=await encodeItem(item,format);const success=all?await window.captureAPI.saveBatchItem(token,{data,format}):await window.captureAPI.save({data,format});if(success)saved++;else cancelled=true;}
+      try{const success=all?await window.captureAPI.saveBatchItem(token,{data:await encodeItem(item,format),format}):await window.captureAPI.save({data:item.data,jpegData:await encodeItem(item,'jpeg'),format});if(success)saved++;else cancelled=true;}
       catch(error){failures.push(item.name+': '+error.message);}
     }
     status(failures.length?`${saved}개 저장, ${failures.length}개 실패 · ${failures.join(' / ')}`:cancelled?'저장을 취소했습니다.':`${format.toUpperCase()} 이미지 ${saved}개를 저장했습니다.`);

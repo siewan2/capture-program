@@ -37,10 +37,12 @@ function resizeRect(rect,handle,dx,dy,modifiers,bounds){
 function rectHandles(rect){
   const {x,y,width:w,height:h}=rect;return [['nw',x,y],['n',x+w/2,y],['ne',x+w,y],['e',x+w,y+h/2],['se',x+w,y+h],['s',x+w/2,y+h],['sw',x,y+h],['w',x,y+h/2]].map(([name,x,y])=>({name,x,y}));
 }
-function hitRect(rect,p,tolerance=8){
-  for(const handle of rectHandles(rect))if(Math.abs(p.x-handle.x)<=tolerance&&Math.abs(p.y-handle.y)<=tolerance)return handle.name;
-  if(p.x>=rect.x-tolerance&&p.x<=rect.x+rect.width+tolerance&&p.y>=rect.y-tolerance&&p.y<=rect.y+rect.height+tolerance){
-    if(Math.abs(p.x-rect.x)<=tolerance)return 'w';if(Math.abs(p.x-rect.x-rect.width)<=tolerance)return 'e';if(Math.abs(p.y-rect.y)<=tolerance)return 'n';if(Math.abs(p.y-rect.y-rect.height)<=tolerance)return 's';
+function hitRect(rect,p,tolerance=6){
+  const nearest=rectHandles(rect).map(handle=>({...handle,distance:Math.hypot(p.x-handle.x,p.y-handle.y)})).sort((a,b)=>a.distance-b.distance)[0];
+  if(nearest.distance<=tolerance)return nearest.name;
+  const edge=Math.min(tolerance,4);
+  if(p.x>=rect.x-edge&&p.x<=rect.x+rect.width+edge&&p.y>=rect.y-edge&&p.y<=rect.y+rect.height+edge){
+    if(Math.abs(p.x-rect.x)<=edge)return 'w';if(Math.abs(p.x-rect.x-rect.width)<=edge)return 'e';if(Math.abs(p.y-rect.y)<=edge)return 'n';if(Math.abs(p.y-rect.y-rect.height)<=edge)return 's';
     return 'move';
   }
   return null;

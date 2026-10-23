@@ -1,6 +1,7 @@
-const {BrowserWindow,desktopCapturer,screen,ipcMain}=require('electron');
+const {BrowserWindow,desktopCapturer,screen,ipcMain,nativeImage}=require('electron');
 const path=require('node:path');
 const {listWindows,localWindows}=require('./windows-native');
+const {stitchDesktop}=require('./virtual-desktop');
 const {pixelRect,presetSize}=require('./geometry');
 let active=null;
 function installOverlayCapture(main){
@@ -51,14 +52,18 @@ function installOverlayCapture(main){
       session.windowSources=windowSources;
       if(mode==='window'&&!nativeWindows.some(w=>windowSources.some(s=>s.id.split(':')[1]===w.handle&&!s.thumbnail.isEmpty())))throw new Error('선택할 수 있는 창이 없습니다.');
       if(active!==session)return result;
-      const cursorDisplay=screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
-      for(const display of displays){
-        const source=sources.find(s=>s.display_id===String(display.id));
+      const cursorPoint=screen.getCursorScreenPoint(),cursorDisplay=screen.getDisplayNearestPoint(cursorPoint);
+      const virtual=mode==='fixed'?stitchDesktop(displays,sources,screen,nativeImage):null;
+      const captureDisplays=virtual?[{id:'virtual',bounds:virtual.windowBounds}]:displays;
+      for(const display of captureDisplays){
+        const source=virtual?{thumbnail:virtual.image}:sources.find(s=>s.display_id===String(display.id));
         if(!source||source.thumbnail.isEmpty())throw new Error('화면을 가져오지 못했습니다. 모니터 연결과 화면 캡처 권한을 확인하세요.');
         const window=new BrowserWindow({...display.bounds,show:false,frame:false,transparent:false,backgroundColor:'#000000',alwaysOnTop:true,skipTaskbar:true,resizable:false,movable:false,hasShadow:false,enableLargerThanScreen:true,webPreferences:{preload:path.join(__dirname,'overlay-preload.js'),contextIsolation:true,nodeIntegration:false,sandbox:true}});
+        if(virtual)window.setBounds(screen.screenToDipRect(window,virtual.physical));
         const nativeBounds=mode==='window'?screen.dipToScreenRect(null,display.bounds):null;
         const targets=mode==='window'?localWindows(nativeWindows,windowSources,display,nativeBounds):[];
-        const entry={window,image:source.thumbnail,init:{mode,preset,magnifier:options?.magnifier!==false,targets,bounds:{width:display.bounds.width,height:display.bounds.height},image:source.thumbnail.toDataURL(),imageSize:source.thumbnail.getSize()}};
+        const physicalCursor=virtual?screen.dipToScreenPoint(cursorPoint):null;
+        const entry={window,image:source.thumbnail,init:{mode,preset,visibleAreas:virtual?virtual.monitors.map(m=>({x:m.physical.x-virtual.physical.x,y:m.physical.y-virtual.physical.y,width:m.physical.width,height:m.physical.height})):null,startPoint:virtual?{x:physicalCursor.x-virtual.physical.x,y:physicalCursor.y-virtual.physical.y}:null,magnifier:options?.magnifier!==false,targets,bounds:virtual?{width:virtual.physical.width,height:virtual.physical.height}:{width:display.bounds.width,height:display.bounds.height},image:source.thumbnail.toDataURL(),imageSize:source.thumbnail.getSize()}};
         session.windows.push(entry);
         window.setAlwaysOnTop(true,'screen-saver');
         window.setMenu(null);window.setMenuBarVisibility(false);
@@ -69,7 +74,7 @@ function installOverlayCapture(main){
         if(active!==session)return result;
       }
       for(const {window} of session.windows)window.showInactive();
-      session.windows[displays.findIndex(d=>d.id===cursorDisplay.id)]?.window.focus();
+      session.windows[virtual?0:displays.findIndex(d=>d.id===cursorDisplay.id)]?.window.focus();
       return await result;
     }catch(error){session.finish(null);throw error;}
   };
