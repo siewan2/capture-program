@@ -24,7 +24,7 @@ function drawText(context,text,point,options){
   });
   context.restore();
 }
-if(typeof module!=='undefined')module.exports={drawStroke,drawText,textFont,drawShape,drawFreeform};
+if(typeof module!=='undefined')module.exports={drawStroke,drawText,textFont,drawShape,drawFreeform,restorePixels};
 
 function fillStroke(context,options,closed=true){
   if(closed&&options.fillMode&&options.fillMode!=='none'){context.fillStyle=options.fillColor;context.fill();}
@@ -42,4 +42,15 @@ function drawFreeform(context,points,options,closed){
   for(const point of points.slice(1))context.lineTo(point.x,point.y);
   if(closed&&points.length>=3)context.closePath();
   fillStroke(context,options,closed&&points.length>=3);context.restore();
+}
+function restorePixels(target,original,mask){
+  for(let i=0;i<target.length;i+=4){
+    const coverage=mask[i+3];if(!coverage)continue;
+    if(coverage===255){for(let c=0;c<4;c++)target[i+c]=original[i+c];continue;}
+    if(target[i]===original[i]&&target[i+1]===original[i+1]&&target[i+2]===original[i+2]&&target[i+3]===original[i+3])continue;
+    const mix=coverage/255,oldAlpha=target[i+3]/255,baseAlpha=original[i+3]/255,alpha=oldAlpha*(1-mix)+baseAlpha*mix;
+    for(let c=0;c<3;c++)target[i+c]=alpha?(target[i+c]*oldAlpha*(1-mix)+original[i+c]*baseAlpha*mix)/alpha:0;
+    target[i+3]=alpha*255;
+  }
+  return target;
 }

@@ -61,7 +61,7 @@ function installOverlayCapture(main){
         const entry={window,image:source.thumbnail,init:{mode,preset,magnifier:options?.magnifier!==false,targets,bounds:{width:display.bounds.width,height:display.bounds.height},image:source.thumbnail.toDataURL(),imageSize:source.thumbnail.getSize()}};
         session.windows.push(entry);
         window.setAlwaysOnTop(true,'screen-saver');
-        window.setMenuBarVisibility(false);
+        window.setMenu(null);window.setMenuBarVisibility(false);
         window.webContents.setWindowOpenHandler(()=>({action:'deny'}));
         window.webContents.on('will-navigate',event=>event.preventDefault());
         window.on('closed',()=>session.finish(null));

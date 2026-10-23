@@ -9,7 +9,7 @@ function setup(){
   class Window extends EventEmitter{
     constructor(options){super();this.options=options;this.webContents={setWindowOpenHandler(){},on(){},send(){}};windows.push(this);}
     isDestroyed(){return this.destroyed;}destroy(){this.destroyed=true;this.emit('closed');}
-    setAlwaysOnTop(){}setMenuBarVisibility(){}showInactive(){}focus(){}async loadFile(){}
+    setAlwaysOnTop(){}setMenu(){}setMenuBarVisibility(){}showInactive(){}focus(){}async loadFile(){}
   }
   const main=new EventEmitter();Object.assign(main,{hide(){hidden=true;},show(){shown=true;},focus(){},isMinimized(){return false;},isDestroyed(){return false;}});
   const electron={BrowserWindow:Window,screen:{dipToScreenRect:(_,bounds)=>({...bounds,x:bounds.x*1.5,y:bounds.y*1.5,width:bounds.width*1.5,height:bounds.height*1.5}),getAllDisplays:()=>displays,getDisplayNearestPoint:()=>displays[0],getCursorScreenPoint:()=>({x:-100,y:100}),on(){}},ipcMain:{handle:(name,fn)=>handlers[name]=fn,on:(name,fn)=>events[name]=fn},desktopCapturer:{async getSources(options){assert.equal(hidden,true);if(options.types[0]==='window')return[{id:'window:123:0',name:'Example',thumbnail:{isEmpty:()=>false,toDataURL:()=> 'full-window-image'}}];return displays.map(d=>({display_id:String(d.id),thumbnail:{isEmpty:()=>false,getSize:()=>({width:1920,height:1080}),toDataURL:()=>`display-${d.id}`,crop(rect){cropped={id:d.id,rect};return{toDataURL:()=>`cropped-${d.id}`};}}}));}}};
