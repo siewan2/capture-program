@@ -24,4 +24,22 @@ function drawText(context,text,point,options){
   });
   context.restore();
 }
-if(typeof module!=='undefined')module.exports={drawStroke,drawText,textFont};
+if(typeof module!=='undefined')module.exports={drawStroke,drawText,textFont,drawShape,drawFreeform};
+
+function fillStroke(context,options,closed=true){
+  if(closed&&options.fillMode&&options.fillMode!=='none'){context.fillStyle=options.fillColor;context.fill();}
+  if(!closed||options.fillMode!=='fill'){context.strokeStyle=options.color;context.lineWidth=options.width;context.lineJoin='round';context.lineCap='round';context.stroke();}
+}
+function drawShape(context,kind,rect,options){
+  context.save();context.beginPath();
+  if(kind==='rect')context.rect(rect.x,rect.y,rect.width,rect.height);
+  else context.ellipse(rect.x+rect.width/2,rect.y+rect.height/2,rect.width/2,rect.height/2,0,0,Math.PI*2);
+  fillStroke(context,options);context.restore();
+}
+function drawFreeform(context,points,options,closed){
+  if(points.length<2)return;
+  context.save();context.beginPath();context.moveTo(points[0].x,points[0].y);
+  for(const point of points.slice(1))context.lineTo(point.x,point.y);
+  if(closed&&points.length>=3)context.closePath();
+  fillStroke(context,options,closed&&points.length>=3);context.restore();
+}
