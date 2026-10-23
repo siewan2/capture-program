@@ -1,6 +1,6 @@
 const $ = id => document.getElementById(id);
 const canvas=$('editor'), ctx=canvas.getContext('2d');
-let originalCanvas=null,imageRevision=0,loadingImage=false,zoomDrag=null;
+let originalCanvas=null,imageRevision=0,loadingImage=false,zoomDrag=null,controlDown=false;
 let captures=[], current=null, tool='select', drawing=null, freeform=null, busy=false;
 let presets;
 try {presets=JSON.parse(localStorage.getItem('presets'));} catch {}
@@ -47,6 +47,7 @@ for(const mode of ['region','window','fixed']){
   };
 }
 registerShortcuts();
+window.captureAPI.onPresetsUpdated(({presets:updated,selected})=>{presets=updated;renderPresets(selected);});
 window.captureAPI.onCapture(mode=>{if(!['region','window','fixed'].includes(mode)||busy||document.querySelector('dialog[open]'))return;showTab('capture');begin(mode);});
 function renderPresets(selected=0){
   for(const id of ['presets','settingsPresets']){$(id).replaceChildren(...presets.map((p,i)=>new Option(`${p.width} × ${p.height}`,i)));$(id).value=Math.min(selected,presets.length-1);}
@@ -92,7 +93,23 @@ function applyViewScale(){
   positionTextInput();
 }
 new ResizeObserver(applyViewScale).observe($('workspace'));
-function endZoom(){if(!zoomDrag)return;zoomDrag=null;canvas.style.cursor=tool==='text'?'text':tool==='select'?'default':'crosshair';}
+function endZoom(){if(!zoomDrag)return;const id=zoomDrag.pointerId;zoomDrag=null;try{if($('workspace').hasPointerCapture(id))$('workspace').releasePointerCapture(id);}catch{}canvas.style.cursor=tool==='text'?'text':tool==='select'?'default':'crosshair';}
+const workspace=$('workspace');
+workspace.addEventListener('pointerdown',event=>{
+  if(!current||loadingImage||event.button!==0||!(event.ctrlKey||controlDown||event.getModifierState?.('Control')))return;
+  if(event.target!==canvas&&event.target!==workspace)return;
+  event.preventDefault();event.stopImmediatePropagation();finishText(true);finishFreeform(true);
+  zoomDrag={x:event.clientX,y:event.clientY,zoom:current.viewZoom||1,pointerId:event.pointerId};workspace.setPointerCapture(event.pointerId);canvas.style.cursor='zoom-in';
+},true);
+window.addEventListener('pointermove',event=>{
+  if(!zoomDrag||event.pointerId!==zoomDrag.pointerId)return;
+  event.preventDefault();event.stopImmediatePropagation();const dx=event.clientX-zoomDrag.x,dy=zoomDrag.y-event.clientY,delta=Math.abs(dx)>=Math.abs(dy)?dx:dy;
+  current.viewZoom=Math.max(.1,Math.min(8,zoomDrag.zoom*Math.exp(delta/180)));applyViewScale();
+  canvas.style.cursor=delta>=0?'zoom-in':'zoom-out';status(`보기 확대 ${Math.round(current.viewZoom*100)}% · Ctrl+오른쪽/위: 확대 · 왼쪽/아래: 축소`);
+},true);
+for(const type of ['pointerup','pointercancel'])window.addEventListener(type,event=>{if(zoomDrag&&event.pointerId===zoomDrag.pointerId){event.preventDefault();event.stopImmediatePropagation();endZoom();}},true);
+window.addEventListener('keydown',event=>{if(event.key==='Control')controlDown=true;});window.addEventListener('keyup',event=>{if(event.key==='Control')controlDown=false;});
+window.addEventListener('blur',()=>{controlDown=false;endZoom();});
 function checkpoint(){current.history.push({data:current.data,baseData:current.baseData});if(current.history.length>20)current.history.shift();}
 function commit(){applyViewScale();current.data=canvas.toDataURL('image/png');current.width=canvas.width;current.height=canvas.height;renderGallery();}
 function addCapture(data){const item={id:crypto.randomUUID(),data,originalData:data,baseData:data,name:`캡처 ${new Date().toLocaleTimeString('ko-KR')}`,history:[]};captures.unshift(item);openItem(item);}
@@ -102,7 +119,7 @@ async function begin(mode){
   finishText(true);finishFreeform(true);busy=true;
   try{
     const preset=presets[Number($('presets').value)];
-    const data=await window.captureAPI.captureOverlay(mode,preset,{magnifier:settings.magnifier});
+    const data=await window.captureAPI.captureOverlay(mode,preset,{magnifier:settings.magnifier,presets});
     if(data){showTab('capture');addCapture(data);}else status('캡처를 취소했습니다.');
   }catch(error){status(`캡처 실패: ${error.message}`);}finally{busy=false;}
 }
@@ -228,8 +245,7 @@ document.addEventListener('keydown',event=>{
 });
 canvas.onpointerdown=e=>{
   if(!current||loadingImage||e.button!==0)return;
-  if(tool==='select'&&!e.ctrlKey)return;
-  if(e.ctrlKey){e.preventDefault();finishText(true);finishFreeform(true);zoomDrag={y:e.clientY,zoom:current.viewZoom||1};canvas.setPointerCapture(e.pointerId);canvas.style.cursor='ns-resize';return;}
+  if(tool==='select')return;
   const p=point(e,canvas);
   if(tool==='text'){
     e.preventDefault();
@@ -246,7 +262,6 @@ canvas.onpointerdown=e=>{
   if(tool==='pen'||tool==='highlighter')drawStroke(ctx,[p],{...drawing.options,highlight:tool==='highlighter'});
 };
 canvas.onpointermove=e=>{
-  if(zoomDrag){current.viewZoom=Math.max(.1,Math.min(8,zoomDrag.zoom*Math.exp((zoomDrag.y-e.clientY)/180)));applyViewScale();status(`보기 확대 ${Math.round(current.viewZoom*100)}% · Ctrl+위로 드래그: 확대 / 아래로: 축소`);return;}
   if(tool==='freeform'&&freeform){const p=point(e,canvas);if(freeform.dragging&&(e.buttons&1)){if(Math.hypot(p.x-freeform.points.at(-1).x,p.y-freeform.points.at(-1).y)>2)freeform.points.push(p);}freeform.hover=p;paintFreeform();return;}
   if(!drawing)return;
   const p=point(e,canvas),options=drawing.options;if(drawing.tool!=='eraser')ctx.putImageData(drawing.base,0,0);
@@ -297,10 +312,10 @@ async function encodeItem(item,format){
 async function saveItems(items,all=false){
   if(saving||!items.length)return;
   finishText(true);finishFreeform(true);
-  const snapshots=items.map(item=>({data:item.data,name:item.name})),format=settings.format;
+  const snapshots=items.map(item=>({data:item.data,name:item.name}));let format=settings.format;
   saving=true;renderGallery();let saved=0,token=null,cancelled=false;const failures=[];
   try{
-    if(all){token=await window.captureAPI.chooseBatchFolder();if(!token){status('모두 저장을 취소했습니다.');return;}}
+    if(all){const batch=await window.captureAPI.chooseBatchFolder(settings.format);if(!batch){status('모두 저장을 취소했습니다.');return;}token=batch.token;format=batch.format;}
     for(const [index,item] of snapshots.entries()){
       status(`저장 중… ${index+1} / ${snapshots.length}`);
       try{const success=all?await window.captureAPI.saveBatchItem(token,{data:await encodeItem(item,format),format}):await window.captureAPI.save({data:item.data,jpegData:await encodeItem(item,'jpeg'),format});if(success)saved++;else cancelled=true;}

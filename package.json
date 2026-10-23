@@ -1,17 +1,19 @@
 {
   "name": "capture-program",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "private": true,
   "description": "Windows screen capture and annotation app",
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
     "test": "node --test",
-    "dist": "electron-builder --win nsis"
+    "dist": "electron-builder --win nsis",
+    "test:desktop": "node scripts/desktop-smoke.cjs"
   },
   "devDependencies": {
     "electron": "^40.0.0",
-    "electron-builder": "^26.0.12"
+    "electron-builder": "^26.0.12",
+    "playwright-core": "^1.64.1"
   },
   "build": {
     "appId": "com.siewan.captureprogram",

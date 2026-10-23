@@ -1,5 +1,5 @@
 const canvas=document.getElementById('surface'),ctx=canvas.getContext('2d'),hint=document.getElementById('hint');
-let config,image,start=null,rect=null,submitted=false,hovered=null,cursor=null,fixedDrag=null;
+let config,image,start=null,rect=null,submitted=false,hovered=null,cursor=null,fixedDrag=null,localPresets=[];
 function paint(){
   ctx.drawImage(image,0,0,canvas.width,canvas.height);if(config.mode!=='window'){ctx.fillStyle='#0006';ctx.fillRect(0,0,canvas.width,canvas.height);}
   if(config.mode==='window'){
@@ -14,7 +14,7 @@ function paint(){
     const sx=canvas.width/config.bounds.width,sy=canvas.height/config.bounds.height;
     const handleSize=4*config.bounds.width/canvas.getBoundingClientRect().width;
     ctx.save();ctx.fillStyle='#fff';ctx.strokeStyle='#6559ec';ctx.lineWidth=sx;
-    for(const handle of rectHandles(rect)){ctx.fillRect((handle.x-handleSize)*sx,(handle.y-handleSize)*sy,2*handleSize*sx,2*handleSize*sy);ctx.strokeRect((handle.x-handleSize)*sx,(handle.y-handleSize)*sy,2*handleSize*sx,2*handleSize*sy);}ctx.restore();positionFixedUI();
+    for(const handle of rectHandles(rect)){ctx.fillRect((handle.x-handleSize)*sx,(handle.y-handleSize)*sy,2*handleSize*sx,2*handleSize*sy);ctx.strokeRect((handle.x-handleSize)*sx,(handle.y-handleSize)*sy,2*handleSize*sx,2*handleSize*sy);}ctx.restore();syncFixedInputs();positionFixedUI();
   }
   if(config.mode==='region'&&cursor){
     const x=Math.floor(cursor.x*canvas.width/config.bounds.width)+0.5,y=Math.floor(cursor.y*canvas.height/config.bounds.height)+0.5;
@@ -42,6 +42,32 @@ function initFixed(){
   const center=config.startPoint||{x:config.bounds.width/2,y:config.bounds.height/2};
   rect={x:Math.max(0,Math.min(config.bounds.width-width*scale,center.x-width*scale/2)),y:Math.max(0,Math.min(config.bounds.height-height*scale,center.y-height*scale/2)),width:width*scale,height:height*scale};
 }
+function renderCapturePresets(selected){
+  const select=document.getElementById('capturePresets');select.replaceChildren(new Option('사용자 지정','custom'),...localPresets.map((p,i)=>new Option(`${p.width} × ${p.height}`,String(i))));
+  select.value=Number.isInteger(selected)?String(selected):'custom';
+}
+function syncFixedInputs(){
+  const size=pixelRect(rect,config.bounds,config.imageSize);
+  for(const [id,value] of [['captureWidth',size.width],['captureHeight',size.height]])if(document.activeElement!==document.getElementById(id))document.getElementById(id).value=value;
+  if(document.activeElement!==document.getElementById('capturePresets')){const index=localPresets.findIndex(p=>p.width===size.width&&p.height===size.height);document.getElementById('capturePresets').value=index<0?'custom':String(index);}
+}
+function setCaptureSize(width,height){
+  if(!presetSize(width,height))throw new Error('가로·세로는 1~16384 사이 정수로 입력하세요.');
+  if(width>config.imageSize.width||height>config.imageSize.height)throw new Error('전체 모니터 화면보다 큰 크기는 적용할 수 없습니다.');
+  const w=width*config.bounds.width/config.imageSize.width,h=height*config.bounds.height/config.imageSize.height,cx=rect.x+rect.width/2,cy=rect.y+rect.height/2;
+  rect={x:Math.max(0,Math.min(config.bounds.width-w,cx-w/2)),y:Math.max(0,Math.min(config.bounds.height-h,cy-h/2)),width:w,height:h};paint();
+}
+function readCaptureSize(){return{width:Number(document.getElementById('captureWidth').value),height:Number(document.getElementById('captureHeight').value)};}
+function applyCaptureSize(){try{const size=readCaptureSize();setCaptureSize(size.width,size.height);document.getElementById('fixedStatus').textContent='크기를 적용했습니다.';return size;}catch(error){document.getElementById('fixedStatus').textContent=error.message;return null;}}
+document.getElementById('applyCaptureSize').onclick=applyCaptureSize;
+document.getElementById('capturePresets').onchange=async event=>{
+  const index=Number(event.target.value);if(event.target.value==='custom'||!localPresets[index])return;
+  try{const p=localPresets[index];setCaptureSize(p.width,p.height);await window.overlayAPI.preset({type:'select',index});document.getElementById('fixedStatus').textContent='프리셋을 적용했습니다.';}catch(error){document.getElementById('fixedStatus').textContent=error.message;}
+};
+document.getElementById('addCapturePreset').onclick=async()=>{
+  const size=applyCaptureSize();if(!size)return;
+  try{const result=await window.overlayAPI.preset({type:'add',preset:size});localPresets=result.presets;renderCapturePresets(result.selected);document.getElementById('fixedStatus').textContent='프리셋을 저장했습니다.';}catch(error){document.getElementById('fixedStatus').textContent=error.message;}
+};
 function positionFixedUI(){
   const areas=config.visibleAreas||[{x:0,y:0,...config.bounds}],cx=rect.x+rect.width/2,cy=rect.y+rect.height/2;
   const area=areas.find(a=>cx>=a.x&&cx<a.x+a.width&&cy>=a.y&&cy<a.y+a.height)||areas.slice().sort((a,b)=>Math.hypot(cx-a.x-a.width/2,cy-a.y-a.height/2)-Math.hypot(cx-b.x-b.width/2,cy-b.y-b.height/2))[0];
@@ -91,16 +117,17 @@ document.getElementById('fixedCapture').onclick=submit;document.getElementById('
 document.onkeydown=e=>{
   if(e.key==='Escape')window.overlayAPI.cancel();
   if(config?.mode!=='fixed'||!rect||submitted)return;
+  if(e.target.closest('input,select,button')){if(e.key==='Enter'&&e.target.matches('input')){e.preventDefault();applyCaptureSize();}return;}
   if(e.key==='Enter'){e.preventDefault();submit();return;}
   const directions={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]};
   const d=directions[e.key];if(d){e.preventDefault();const step=e.shiftKey?10:1;rect=moveRect(rect,d[0]*step*config.bounds.width/config.imageSize.width,d[1]*step*config.bounds.height/config.imageSize.height,config.bounds);paint();if(cursor)fixedCursor(cursor);}
 };
-document.oncontextmenu=e=>{e.preventDefault();window.overlayAPI.cancel();};
+document.oncontextmenu=e=>{if(e.target.closest('input,select'))return;e.preventDefault();window.overlayAPI.cancel();};
 window.overlayAPI.onError(message=>{submitted=false;hint.textContent=message;});
 (async()=>{try{
   config=await window.overlayAPI.init();if(!config)return;
   image=new Image();await new Promise((resolve,reject)=>{image.onload=resolve;image.onerror=reject;image.src=config.image;});
-  canvas.width=config.imageSize.width;canvas.height=config.imageSize.height;if(config.mode==='fixed'){initFixed();document.getElementById('fixedControls').hidden=false;}paint();
+  canvas.width=config.imageSize.width;canvas.height=config.imageSize.height;if(config.mode==='fixed'){localPresets=config.presets?.length?config.presets:[config.preset];renderCapturePresets();initFixed();document.getElementById('fixedControls').hidden=false;}paint();
   if(config.mode==='window')hint.textContent='캡처할 창 위로 마우스를 이동한 후 클릭하세요 · Esc 취소';
 
 }catch{hint.textContent='화면을 표시하지 못했습니다. Esc로 취소하세요.';}})();

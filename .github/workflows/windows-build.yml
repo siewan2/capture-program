@@ -25,6 +25,8 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: Run tests
         run: npm test
+      - name: Test actual Electron desktop interactions
+        run: npm run test:desktop
       - name: Build unpacked Windows application
         run: npx --no-install electron-builder --win --x64 --dir --publish never
       - name: Upload runnable Windows app
