@@ -1,6 +1,6 @@
 {
   "name": "capture-program",
-  "version": "0.13.0",
+  "version": "0.14.0",
   "private": true,
   "description": "Windows screen capture and annotation app",
   "main": "src/main.js",
@@ -28,7 +28,14 @@
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "Capture-Program-Setup-${version}.${ext}",
+      "allowElevation": false,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "deleteAppDataOnUninstall": false,
+      "include": "build/installer.nsh"
     }
   }
 }

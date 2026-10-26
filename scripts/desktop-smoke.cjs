@@ -6,8 +6,10 @@ const path = require('node:path');
 (async () => {
   const profile = await fs.mkdtemp(path.join(os.tmpdir(), 'capture-desktop-'));
   let application;
+  const executablePath=process.env.CAPTURE_TEST_EXE||require('electron');
+  const launch=hidden=>electron.launch({executablePath,args:[...(process.env.CAPTURE_TEST_EXE?[]:[path.resolve(__dirname,'..')]),...(hidden?['--startup-hidden']:[]),`--user-data-dir=${profile}`],timeout:60000});
   try {
-    application = await electron.launch({executablePath:require('electron'),args:[path.resolve(__dirname,'..'),'--startup-hidden',`--user-data-dir=${profile}`],timeout:60000});
+    application = await launch(true);
     if(process.platform==='win32')await application.evaluate(({app})=>{
       const options={path:process.execPath,args:['--startup-hidden']};
       try{
@@ -24,6 +26,14 @@ const path = require('node:path');
     await page.click('#settingsTab');assert.equal(await page.locator('#captureShadeEnabled').isChecked(),false);
     await page.locator('#captureShadeEnabled').check();await page.reload();await page.waitForFunction(()=>document.querySelector('#region')?.onclick);assert.equal(await page.locator('#captureShadeEnabled').isChecked(),true);await page.click('#captureTab');
     assert.equal(await page.locator('[data-tool=select]').count(),0);assert.equal(await page.locator('[data-tool=highlighter]').getAttribute('class'),'active');
+    await application.evaluate(({globalShortcut})=>{
+      const register=globalShortcut.register.bind(globalShortcut);globalThis.galleryTestCallbacks={};globalShortcut.register=(key,callback)=>{globalThis.galleryTestCallbacks[key]=callback;return register(key,callback);};
+    });
+    await page.click('#settingsTab');await page.locator('#shortcut-gallery').focus();await page.keyboard.press('Control+Shift+4');await page.waitForFunction(()=>document.querySelector('#shortcut-status-gallery').textContent==='등록됨');
+    assert.equal(await application.evaluate(({globalShortcut})=>globalShortcut.isRegistered('Control+Shift+4')),true);
+    await application.evaluate(({BrowserWindow})=>{BrowserWindow.getAllWindows()[0].hide();globalThis.galleryTestCallbacks['Control+Shift+4']();});
+    await page.waitForFunction(()=>!document.querySelector('#capturePanel').hidden);
+    assert.equal(await application.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].isVisible()),true);
     const fixture=await page.evaluate(()=>{const c=document.createElement('canvas');c.width=800;c.height=600;const x=c.getContext('2d');x.fillStyle='#d6e6fa';x.fillRect(0,0,800,600);x.fillStyle='#e34466';x.fillRect(0,0,100,80);const data=c.toDataURL();addCapture(data);return data;});
     await page.waitForFunction(()=>!document.querySelector('#rotate').disabled);
     const original=await page.locator('#editor').evaluate(c=>c.toDataURL());
@@ -75,7 +85,7 @@ const path = require('node:path');
     assert.equal((await page.evaluate(()=>captureAPI.listPinned())).items.length,0);
     await page.locator('.capture-pin').first().click();await page.waitForFunction(()=>!document.querySelector('.capture-pin').disabled);await page.click('#rotate');
     const edited=await page.locator('#editor').evaluate(c=>c.toDataURL());assert.equal((await page.evaluate(()=>captureAPI.listPinned())).items[0].data,edited);
-    await application.close();application=await electron.launch({executablePath:require('electron'),args:[path.resolve(__dirname,'..'),`--user-data-dir=${profile}`],timeout:60000});
+    await application.close();application=await launch(false);
     const restored=await application.firstWindow();await restored.waitForFunction(()=>document.querySelector('#count').textContent==='1'&&!document.querySelector('#rotate').disabled);
     assert.equal(await restored.locator('[data-tool=highlighter]').getAttribute('class'),'active');assert.equal(await restored.inputValue('#weight'),'41');assert.equal(await restored.inputValue('#opacity'),'48');
     await restored.click('[data-tool=pen]');assert.equal(await restored.inputValue('#weight'),'7');assert.equal(await restored.inputValue('#color'),'#000000');

@@ -6,6 +6,7 @@ const {createSaveDialogs}=require('./save-dialogs');
 const {createPinnedStore}=require('./pinned-store');
 const {createStartup,STARTUP_ARG}=require('./startup');
 const {applyShortcuts} = require('./shortcuts');
+if(process.platform==='win32')app.setAppUserModelId('com.siewan.captureprogram');
 let main,tray;
 const primaryInstance=app.requestSingleInstanceLock();
 if(!primaryInstance)app.quit();
@@ -33,6 +34,10 @@ app.whenReady().then(async () => {
   });
   main.loadFile(path.join(__dirname,'index.html'));
   ipcMain.handle('shortcuts', (_, shortcuts) => applyShortcuts(globalShortcut, shortcuts, mode => {
+    if(mode==='gallery'){
+      if(BrowserWindow.getAllWindows().some(window=>window!==main&&!window.isDestroyed()))return;
+      if(main.isMinimized())main.restore();main.show();main.focus();
+    }
     main.webContents.send('capture-shortcut', mode);
   }));
   main.webContents.setWindowOpenHandler(() => ({action:'deny'}));

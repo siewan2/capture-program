@@ -8,7 +8,7 @@ if(!Array.isArray(presets)||!presets.length||!presets.every(p=>presetSize(p.widt
 function status(message){$('status').textContent=message;}
 let settings;
 try { settings=JSON.parse(localStorage.getItem('settings')); } catch {}
-settings={theme:settings?.theme==='dark'?'dark':'light',magnifier:settings?.magnifier!==false,shade:settings?.shade===true,format:settings?.format==='jpeg'?'jpeg':'png',shortcuts:{region:'Control+Shift+1',window:'Control+Shift+2',fixed:'Control+Shift+3',...settings?.shortcuts}};
+settings={theme:settings?.theme==='dark'?'dark':'light',magnifier:settings?.magnifier!==false,shade:settings?.shade===true,format:settings?.format==='jpeg'?'jpeg':'png',shortcuts:{region:'Control+Shift+1',window:'Control+Shift+2',fixed:'Control+Shift+3',gallery:'Control+Shift+4',...settings?.shortcuts}};
 document.documentElement.dataset.theme=settings.theme;$('theme').value=settings.theme;
 $('theme').onchange=()=>{settings.theme=$('theme').value;document.documentElement.dataset.theme=settings.theme;persistSettings();$('settingsStatus').textContent='화면 스타일을 저장했습니다.';};
 function persistSettings(){localStorage.setItem('settings',JSON.stringify(settings));}
@@ -38,10 +38,10 @@ updateFormat();$('imageFormat').onchange=()=>{settings.format=$('imageFormat').v
 let shortcutRevision=0;
 async function registerShortcuts(){
   const revision=++shortcutRevision;
-  try{const result=await window.captureAPI.shortcuts(settings.shortcuts);if(revision!==shortcutRevision)return;for(const mode of ['region','window','fixed'])$('shortcut-status-'+mode).textContent=result[mode];}
+  try{const result=await window.captureAPI.shortcuts(settings.shortcuts);if(revision!==shortcutRevision)return;for(const mode of ['region','window','fixed','gallery'])$('shortcut-status-'+mode).textContent=result[mode];}
   catch(e){$('settingsStatus').textContent='단축키 등록 실패: '+e.message;}
 }
-for(const mode of ['region','window','fixed']){
+for(const mode of ['region','window','fixed','gallery']){
   const input=$('shortcut-'+mode);input.value=settings.shortcuts[mode]||'';
   input.onkeydown=event=>{
     if(event.key==='Tab')return;
@@ -54,14 +54,14 @@ for(const mode of ['region','window','fixed']){
       const name=/^Key[A-Z]$/.test(code)?code.slice(3):/^Digit[0-9]$/.test(code)?code.slice(5):/^F([1-9]|1[0-9]|2[0-4])$/.test(code)?code:null;
       if(!name||(!event.ctrlKey&&!event.altKey&&!event.metaKey&&!name.startsWith('F'))){$('shortcut-status-'+mode).textContent='Ctrl/Alt와 문자·숫자 조합 또는 F1~F24를 사용하세요.';return;}
       parts.push(name);key=parts.join('+');
-      if(Object.entries(settings.shortcuts).some(([other,value])=>other!==mode&&value===key)){$('shortcut-status-'+mode).textContent='다른 캡처 방식에서 이미 사용하는 단축키입니다.';return;}
+      if(Object.entries(settings.shortcuts).some(([other,value])=>other!==mode&&value===key)){$('shortcut-status-'+mode).textContent='다른 기능에서 이미 사용하는 단축키입니다.';return;}
     }
     settings.shortcuts[mode]=key;input.value=key;persistSettings();registerShortcuts();
   };
 }
 registerShortcuts();
 window.captureAPI.onPresetsUpdated(({presets:updated,selected})=>{presets=updated;renderPresets(selected);});
-window.captureAPI.onCapture(mode=>{if(!['region','window','fixed'].includes(mode)||busy||document.querySelector('dialog[open]'))return;showTab('capture');begin(mode);});
+window.captureAPI.onCapture(mode=>{if(mode==='gallery'){showTab('capture');return;}if(!['region','window','fixed','gallery'].includes(mode)||busy||document.querySelector('dialog[open]'))return;showTab('capture');begin(mode);});
 function renderPresets(selected=0){
   for(const id of ['presets','settingsPresets']){$(id).replaceChildren(...presets.map((p,i)=>new Option(`${p.width} × ${p.height}`,i)));$(id).value=Math.min(selected,presets.length-1);}
   localStorage.setItem('presets',JSON.stringify(presets));localStorage.setItem('selectedPreset',$('presets').value);

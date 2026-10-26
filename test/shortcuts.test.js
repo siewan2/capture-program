@@ -13,3 +13,10 @@ test('invalid accelerator exceptions do not prevent other registrations',()=>{
   const result=applyShortcuts(api,{region:'bad',window:'Control+2',fixed:null},()=>{});
   assert.match(result.region,/형식/);assert.equal(result.window,'등록됨');assert.match(result.fixed,/잘못된/);
 });
+test('gallery shortcut is independently registered, invoked and disabled',()=>{
+  const callbacks={},triggered=[];
+  const api={unregisterAll(){},register(key,callback){callbacks[key]=callback;return true;}};
+  const shortcuts={region:'Control+1',window:'Control+2',fixed:'Control+3',gallery:'Control+Shift+4'};
+  assert.equal(applyShortcuts(api,shortcuts,mode=>triggered.push(mode)).gallery,'등록됨');callbacks['Control+Shift+4']();assert.deepEqual(triggered,['gallery']);
+  assert.equal(applyShortcuts(api,{...shortcuts,gallery:''},()=>{}).gallery,'사용 안 함');
+});
