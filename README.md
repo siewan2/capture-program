@@ -11,13 +11,13 @@ npm ci
 npm start
 ```
 
-Windows 설치 파일 생성:
+Windows 무설치 ZIP 생성:
 
 ```powershell
 npm run dist
 ```
 
-`dist` 폴더에 `Capture-Program-Setup-버전.exe` 설치 파일이 생성됩니다. 설치 마법사에서 경로를 고르고 설치하면 시작 메뉴와 바탕화면 바로가기가 생성됩니다. 설치 후 설정에서 Windows 자동 실행을 켜세요. 기존 무설치 버전은 자동 실행을 끄고 트레이에서 완전히 종료한 뒤 설치하세요. 고정 이미지와 도구 설정은 같은 사용자 앱 데이터 폴더에 유지됩니다. 서명 인증서는 포함하지 않았습니다.
+`dist` 폴더에 `Capture-Program-버전-Windows-x64.zip`이 생성됩니다. 압축을 모두 풀고 `Capture Program.exe`를 실행하세요. 설치나 관리자 권한은 필요 없습니다. 기존 버전은 트레이에서 완전히 종료한 뒤 실행하세요. 자동 실행이 기존 설치 경로를 가리키면 기존 앱에서 해제하고, 새 무설치 앱을 보관할 폴더에서 다시 켜주세요. 고정 이미지와 도구 설정은 같은 사용자 앱 데이터 폴더에 유지됩니다.
 
 ## 사용법
 
@@ -63,6 +63,6 @@ npm run test:desktop
 
 ## GitHub에서 Windows 빌드 다운로드
 
-저장소의 **Actions → Build Windows app**에서 성공한 실행을 선택한 뒤, 하단 **Artifacts → Capture-Program-Windows-Installer-x64**를 다운로드합니다(GitHub 로그인 필요). GitHub Actions는 다운로드를 ZIP으로 감싸서 제공하므로, 안의 `Capture-Program-Setup-버전.exe`를 실행해 설치하세요. 앱 실행에 Node.js는 필요 없습니다. 아티팩트 보관 기간은 14일입니다.
+저장소의 **Actions → Build Windows app**에서 성공한 실행을 선택한 뒤, 하단 **Artifacts → Capture-Program-Windows-ZIP-x64**를 다운로드합니다(GitHub 로그인 필요). 다운로드 안의 배포 ZIP을 모두 풀고 `Capture Program.exe`를 실행하세요. Releases의 ZIP 링크로도 바로 다운로드할 수 있습니다. 앱 실행에 Node.js는 필요 없습니다. 아티팩트 보관 기간은 14일입니다.
 
 `main`에 코드를 올리면 자동 빌드합니다. 다시 빌드하려면 Actions의 **Run workflow**를 사용하세요. 서명되지 않은 테스트 버전이며 실제 Windows 캡처 동작은 직접 확인해야 합니다.

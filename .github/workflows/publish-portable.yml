@@ -1,0 +1,43 @@
+name: Publish verified portable Windows ZIP
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Successful Windows build run ID
+        required: true
+      version:
+        description: Portable version
+        required: true
+permissions:
+  actions: read
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Verify source build
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CAPTURE_RUN_ID: ${{ inputs.run_id }}
+          CAPTURE_VERSION: ${{ inputs.version }}
+        run: |
+          [[ "$CAPTURE_RUN_ID" =~ ^[0-9]+$ ]]
+          [[ "$CAPTURE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CAPTURE_RUN_ID" > "$RUNNER_TEMP/capture-source-run.json"
+          jq -e '.status == "completed" and .conclusion == "success" and .head_branch == "main" and .path == ".github/workflows/windows-build.yml"' "$RUNNER_TEMP/capture-source-run.json"
+          echo "CAPTURE_SOURCE_SHA=$(jq -r .head_sha "$RUNNER_TEMP/capture-source-run.json")" >> "$GITHUB_ENV"
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.run_id }}
+          name: Capture-Program-Windows-ZIP-x64
+          path: portable
+      - name: Publish portable ZIP
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CAPTURE_VERSION: ${{ inputs.version }}
+        run: |
+          archive="portable/Capture-Program-$CAPTURE_VERSION-Windows-x64.zip"
+          test -f "$archive"
+          gh release create "v$CAPTURE_VERSION" "$archive" --target "$CAPTURE_SOURCE_SHA" --title "Capture Program v$CAPTURE_VERSION" --notes-file build/release-notes.md

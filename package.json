@@ -1,13 +1,13 @@
 {
   "name": "capture-program",
-  "version": "0.15.0",
+  "version": "0.15.1",
   "private": true,
   "description": "Windows screen capture and annotation app",
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
     "test": "node --test",
-    "dist": "electron-builder --win nsis",
+    "dist": "electron-builder --win zip --x64",
     "test:desktop": "node scripts/desktop-smoke.cjs"
   },
   "devDependencies": {
@@ -23,7 +23,7 @@
       "package.json"
     ],
     "win": {
-      "target": "nsis",
+      "target": "zip",
       "signAndEditExecutable": false
     },
     "nsis": {
@@ -36,6 +36,7 @@
       "createStartMenuShortcut": true,
       "deleteAppDataOnUninstall": false,
       "include": "build/installer.nsh"
-    }
+    },
+    "artifactName": "Capture-Program-${version}-Windows-x64.${ext}"
   }
 }
