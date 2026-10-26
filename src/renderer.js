@@ -1,5 +1,6 @@
 const $ = id => document.getElementById(id);
 const canvas=$('editor'), ctx=canvas.getContext('2d');
+let cropEditor=null;
 let originalCanvas=null,imageRevision=0,loadingImage=false,zoomDrag=null,controlDown=false;
 let captures=[], current=null, tool='highlighter', drawing=null, freeform=null, busy=false;
 let presets;
@@ -12,7 +13,9 @@ settings={theme:settings?.theme==='dark'?'dark':'light',magnifier:settings?.magn
 document.documentElement.dataset.theme=settings.theme;$('theme').value=settings.theme;
 $('theme').onchange=()=>{settings.theme=$('theme').value;document.documentElement.dataset.theme=settings.theme;persistSettings();$('settingsStatus').textContent='화면 스타일을 저장했습니다.';};
 function persistSettings(){localStorage.setItem('settings',JSON.stringify(settings));}
+function cancelCrop(){cropEditor?.cancel();}
 function showTab(name){
+  cancelCrop();
   finishText(true);finishFreeform(true);
   $('capturePanel').hidden=name!=='capture';$('settingsPanel').hidden=name!=='settings';
   for(const tab of ['capture','settings']){ $(tab+'Tab').classList.toggle('active',name===tab);$(tab+'Tab').setAttribute('aria-selected',String(name===tab)); }
@@ -85,12 +88,13 @@ function renderGallery(){
     const remove=document.createElement('button');remove.className='capture-icon capture-delete';remove.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>';remove.title='이미지 삭제';remove.setAttribute('aria-label','이미지 삭제');remove.disabled=saving||!!item.pinPending;remove.onclick=()=>deleteItem(item);
     card.append(select,pin,remove);return card;
   }));
-  for(const id of ['rotateLeft','rotate','undo','reset'])$(id).disabled=!current || loadingImage || (id==='undo'&&!current.history.length&&!textDraft&&!freeform);
+  for(const id of ['cropImage','rotateLeft','rotate','undo','reset'])$(id).disabled=!current || loadingImage || (cropEditor?.active&&!['cropImage','undo'].includes(id)) || (id==='cropImage'&&saving) || (id==='undo'&&!current.history.length&&!textDraft&&!freeform);
   $('saveAll').disabled=!captures.length||saving;
   $('finishFreeform').disabled=!freeform;$('cancelFreeform').disabled=!freeform;
 
 }
 async function openItem(item){
+  cancelCrop();
   finishText(true);finishFreeform(true);current=item;
   const revision=++imageRevision;loadingImage=true;renderGallery();
   try{
@@ -121,7 +125,7 @@ workspace.addEventListener('wheel',event=>{
 },{passive:false,capture:true});
 workspace.addEventListener('pointerdown',event=>{
   if(!current||loadingImage||event.button!==0||!(event.ctrlKey||controlDown||event.getModifierState?.('Control')))return;
-  if(event.target!==canvas&&event.target!==workspace)return;
+  if(event.target!==canvas&&event.target!==workspace&&event.target!==$('cropGuide'))return;
   event.preventDefault();event.stopImmediatePropagation();finishText(true);finishFreeform(true);
   zoomDrag={x:event.clientX,y:event.clientY,zoom:current.viewZoom||1,pointerId:event.pointerId};workspace.setPointerCapture(event.pointerId);canvas.style.cursor='zoom-in';
 },true);
@@ -140,7 +144,7 @@ async function addCapture(data){const item={id:crypto.randomUUID(),data,original
 function point(event,target){const r=target.getBoundingClientRect();return{x:Math.max(0,Math.min(target.width,(event.clientX-r.left)*target.width/r.width)),y:Math.max(0,Math.min(target.height,(event.clientY-r.top)*target.height/r.height))};}
 async function begin(mode){
   if(busy||saving||document.querySelector('dialog[open]'))return;
-  finishText(true);finishFreeform(true);busy=true;
+  cancelCrop();finishText(true);finishFreeform(true);busy=true;
   try{
     const preset=mode==='fixed'&&presetSize(settings.lastFixedSize?.width,settings.lastFixedSize?.height)?settings.lastFixedSize:presets[Number($('presets').value)];
     const data=await window.captureAPI.captureOverlay(mode,preset,{magnifier:settings.magnifier,shade:settings.shade,lastFixedRect:settings.lastFixedRect,presets});
@@ -215,7 +219,7 @@ function syncFillColor(){
 const fillColors=[['검정','#000000'],['흰색','#ffffff'],['회색','#666666'],['빨강','#ff3030'],['주황','#ff9800'],['노랑','#ffeb3b'],['초록','#159447'],['파랑','#0088ff'],['하늘','#99ccff'],['보라','#8e44ad'],['분홍','#ed4b91']];
 for(const [name,color] of fillColors){const button=document.createElement('button');button.type='button';button.dataset.color=color;button.style.backgroundColor=color;button.setAttribute('aria-label','채우기 '+name);button.onclick=()=>{if(!toolOptions[tool]?.fillColor)return;toolOptions[tool].fillColor=color;persistToolOptions();syncFillColor();$('fillPalette').hidden=true;$('fillColor').setAttribute('aria-expanded','false');if(freeform){freeform.options={...toolOptions.freeform};paintFreeform();}};$('fillPalette').append(button);}
 $('fillColor').onclick=()=>{$('fillPalette').hidden=!$('fillPalette').hidden;$('fillColor').setAttribute('aria-expanded',String(!$('fillPalette').hidden));};
-document.querySelectorAll('[data-tool]').forEach(b=>b.onclick=()=>{finishText(true);finishFreeform(true);$('fillPalette').hidden=true;tool=b.dataset.tool;document.querySelectorAll('[data-tool]').forEach(x=>x.classList.toggle('active',x===b));canvas.style.cursor=tool==='text'?'text':tool==='select'?'default':'crosshair';syncOptions();});
+document.querySelectorAll('[data-tool]').forEach(b=>b.onclick=()=>{cancelCrop();finishText(true);finishFreeform(true);$('fillPalette').hidden=true;tool=b.dataset.tool;document.querySelectorAll('[data-tool]').forEach(x=>x.classList.toggle('active',x===b));canvas.style.cursor=tool==='text'?'text':tool==='select'?'default':'crosshair';syncOptions();});
 function positionTextInput(){
   if(!textDraft)return;
   const r=canvas.getBoundingClientRect(),scaleX=r.width/canvas.width,scaleY=r.height/canvas.height;
@@ -292,7 +296,7 @@ document.addEventListener('keydown',event=>{
   if(event.key==='Backspace'){event.preventDefault();freeform.points.pop();if(!freeform.points.length)finishFreeform(false);else{freeform.hover=null;paintFreeform();}}
 });
 canvas.onpointerdown=e=>{
-  if(!current||loadingImage||e.button!==0)return;
+  if(!current||loadingImage||cropEditor?.active||e.button!==0)return;
   if(tool==='select')return;
   const p=point(e,canvas);
   if(tool==='text'){
@@ -335,14 +339,23 @@ function eraseStroke(stroke){
 function rotateCanvas(source,direction=1){const result=document.createElement('canvas');result.width=source.height;result.height=source.width;const c=result.getContext('2d');c.translate(direction===1?result.width:0,direction===1?0:result.height);c.rotate(direction*Math.PI/2);c.drawImage(source,0,0);return result;}
 function finishDrawing(){if(zoomDrag){endZoom();return;}if(freeform)freeform.dragging=false;if(drawing){drawing=null;commit();}}canvas.onpointerup=finishDrawing;canvas.onpointercancel=finishDrawing;
 syncOptions();
-$('undo').onclick=()=>{if(freeform){finishFreeform(false);return;}if(textDraft){finishText(false);return;}if(!current?.history.length)return;const previous=current.history.pop();current.data=previous.data;current.baseData=previous.baseData;persistPinned(current);openItem(current);};
+cropEditor=createCropEditor({image:canvas,workspace:$('workspace'),layer:$('cropLayer'),guide:$('cropGuide'),controls:$('cropControls'),ratioSelect:$('cropRatio'),dimensions:$('cropDimensions'),applyButton:$('applyCrop'),cancelButton:$('cancelCrop'),onActiveChange:active=>{$('cropImage').classList.toggle('active',active);renderGallery();},onApply:rect=>{
+  if(!current||loadingImage)return;
+  checkpoint();
+  const cut=source=>{const result=document.createElement('canvas');result.width=rect.width;result.height=rect.height;result.getContext('2d').drawImage(source,rect.x,rect.y,rect.width,rect.height,0,0,rect.width,rect.height);return result;};
+  const edited=cut(canvas);originalCanvas=cut(originalCanvas);current.baseData=originalCanvas.toDataURL();
+  canvas.width=rect.width;canvas.height=rect.height;ctx.drawImage(edited,0,0);current.viewZoom=1;commit();status(`이미지를 ${rect.width} × ${rect.height} px로 잘랐습니다.`);
+}});
+$('cropImage').onclick=()=>{if(cropEditor.active){cancelCrop();return;}if(!current||loadingImage||saving)return;finishDrawing();finishText(true);finishFreeform(true);endZoom();cropEditor.start();};
+$('undo').onclick=()=>{if(cropEditor.active){cancelCrop();return;}if(freeform){finishFreeform(false);return;}if(textDraft){finishText(false);return;}if(!current?.history.length)return;const previous=current.history.pop();current.data=previous.data;current.baseData=previous.baseData;persistPinned(current);openItem(current);};
 function rotateImage(direction){
+  cancelCrop();
   finishText(true);finishFreeform(true);if(!current)return;checkpoint();
   const rotated=rotateCanvas(canvas,direction);originalCanvas=rotateCanvas(originalCanvas,direction);current.baseData=originalCanvas.toDataURL();
   canvas.width=rotated.width;canvas.height=rotated.height;ctx.drawImage(rotated,0,0);commit();
 };
 $('rotate').onclick=()=>rotateImage(1);$('rotateLeft').onclick=()=>rotateImage(-1);
-$('reset').onclick=()=>{finishText(false);finishFreeform(false);if(!current)return;checkpoint();current.data=current.originalData;current.baseData=current.originalData;current.viewZoom=1;persistPinned(current);openItem(current);};
+$('reset').onclick=()=>{cancelCrop();finishText(false);finishFreeform(false);if(!current)return;checkpoint();current.data=current.originalData;current.baseData=current.originalData;current.viewZoom=1;persistPinned(current);openItem(current);};
 function pinnedSnapshot(item){return{id:item.id,name:item.name,data:item.data,originalData:item.originalData,baseData:item.baseData};}
 function persistPinned(item){if(item.pinned)window.captureAPI.putPinned(pinnedSnapshot(item)).catch(error=>status('고정 이미지 저장 실패: '+error.message));}
 async function togglePin(item){
@@ -358,6 +371,7 @@ async function restorePinned(){
   catch(error){status('고정 이미지 복원 실패: '+error.message);}
 }
 async function deleteItem(item){
+  if(current===item)cancelCrop();
   if(item.pinPending)return;
   if(item.pinned){item.pinned=false;item.pinPending=true;renderGallery();try{await window.captureAPI.removePinned(item.id);}catch(error){item.pinned=true;item.pinPending=false;renderGallery();status('고정 이미지 삭제 실패: '+error.message);return;}item.pinPending=false;}
   if(current===item){finishText(false);finishFreeform(false);}
@@ -376,7 +390,7 @@ async function encodeItem(item,format){
 }
 async function saveItems(items,all=false){
   if(saving||!items.length)return;
-  finishText(true);finishFreeform(true);
+  cancelCrop();finishText(true);finishFreeform(true);
   const snapshots=items.map(item=>({data:item.data,name:item.name}));let format=settings.format;
   saving=true;renderGallery();let saved=0,token=null,cancelled=false;const failures=[];
   try{
@@ -405,7 +419,7 @@ document.addEventListener('keydown',async event=>{
 
 document.addEventListener('keydown',event=>{
   if(!['ArrowUp','ArrowDown'].includes(event.key)||event.ctrlKey||event.metaKey||event.altKey||event.shiftKey||event.isComposing)return;
-  if(event.target.closest('input,textarea,select,[contenteditable]:not([contenteditable="false"]),[role="textbox"]')||document.querySelector('dialog[open]')||$('capturePanel').hidden||busy||saving||drawing||freeform||textDraft||!captures.length)return;
+  if(event.target.closest('input,textarea,select,[contenteditable]:not([contenteditable="false"]),[role="textbox"]')||document.querySelector('dialog[open]')||$('capturePanel').hidden||busy||saving||drawing||freeform||textDraft||cropEditor?.active||!captures.length)return;
   event.preventDefault();
   const index=captures.indexOf(current),next=captures[index<0?0:Math.max(0,Math.min(captures.length-1,index+(event.key==='ArrowDown'?1:-1)))];
   if(next===current)return;
@@ -419,6 +433,7 @@ document.addEventListener('keydown',event=>{
 window.addEventListener('keydown',event=>{
   if(event.key!=='Escape'||event.isComposing||$('capturePanel').hidden||document.querySelector('dialog[open]'))return;
   event.preventDefault();event.stopImmediatePropagation();
+  if(cropEditor?.active){cancelCrop();return;}
   if(drawing)finishDrawing();endZoom();
   window.captureAPI.hideWindow().catch(error=>status('창 숨기기 실패: '+error.message));
 },true);

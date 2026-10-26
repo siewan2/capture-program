@@ -43,6 +43,17 @@ const path = require('node:path');
     await application.evaluate(()=>globalThis.galleryTestCallbacks['Control+Shift+4']());await page.waitForFunction(()=>!document.querySelector('#capturePanel').hidden);
     assert.equal(await application.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].isVisible()),true);
     assert.equal(await page.locator('#editor').evaluate(c=>c.toDataURL()),original);assert.equal(await page.locator('#count').textContent(),'1');
+    for(const [ratio,a,b] of [['1:1',1,1],['3:4',3,4],['4:3',4,3],['9:16',9,16]]){
+      await page.click('#cropImage');await page.selectOption('#cropRatio',ratio);await page.click('#applyCrop');
+      const size=await page.locator('#editor').evaluate(c=>({width:c.width,height:c.height}));assert.ok(Math.abs(size.width/size.height-a/b)<.01,ratio+' crop ratio');
+      await page.click('#undo');await page.waitForFunction(()=>!document.querySelector('#cropImage').disabled);assert.equal(await page.locator('#editor').evaluate(c=>c.toDataURL()),original);
+    }
+    await page.click('#cropImage');await page.selectOption('#cropRatio','free');
+    const cropBox=await page.locator('#cropGuide').boundingBox();const cropSize=(await page.locator('#cropDimensions').textContent()).match(/(\d+) × (\d+)/).slice(1).map(Number);
+    const corner={x:cropBox.x+(800+cropSize[0])/2*cropBox.width/800,y:cropBox.y+(600+cropSize[1])/2*cropBox.height/600};
+    await page.mouse.move(corner.x,corner.y);await page.mouse.down();await page.mouse.move(corner.x+20*cropBox.width/800,corner.y+10*cropBox.height/600,{steps:5});await page.mouse.up();
+    const resized=(await page.locator('#cropDimensions').textContent()).match(/(\d+) × (\d+)/).slice(1).map(Number);assert.ok(resized[0]>cropSize[0]&&resized[1]>cropSize[1]);
+    await page.locator('#cropGuide').press('ArrowRight');await page.keyboard.press('Escape');assert.equal(await page.locator('#cropLayer').isVisible(),false);assert.equal(await application.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].isVisible()),true);assert.equal(await page.locator('#editor').evaluate(c=>c.toDataURL()),original);
     const before=await page.locator('#editor').boundingBox(),area=await page.locator('#workspace').boundingBox();
     await page.keyboard.down('Control');await page.mouse.move(area.x+5,area.y+8);await page.mouse.down();await page.mouse.move(area.x+145,area.y+8,{steps:10});await page.mouse.up();await page.keyboard.up('Control');
     const enlarged=await page.locator('#editor').boundingBox();assert.ok(enlarged.width>before.width*1.3,'Ctrl+horizontal drag from workspace must enlarge the image');
@@ -94,7 +105,7 @@ const path = require('node:path');
     assert.equal((await page.evaluate(()=>captureAPI.listPinned())).items.length,1);
     await page.locator('.capture-pin').first().click();await page.waitForFunction(()=>document.querySelector('.capture-pin').getAttribute('aria-pressed')==='false'&&!document.querySelector('.capture-pin').disabled);
     assert.equal((await page.evaluate(()=>captureAPI.listPinned())).items.length,0);
-    await page.locator('.capture-pin').first().click();await page.waitForFunction(()=>!document.querySelector('.capture-pin').disabled);await page.click('#rotate');
+    await page.locator('.capture-pin').first().click();await page.waitForFunction(()=>!document.querySelector('.capture-pin').disabled);await page.click('#cropImage');await page.selectOption('#cropRatio','1:1');await page.click('#applyCrop');await page.click('#rotate');
     const edited=await page.locator('#editor').evaluate(c=>c.toDataURL());assert.equal((await page.evaluate(()=>captureAPI.listPinned())).items[0].data,edited);
     await application.close();application=await launch(false);
     const restored=await application.firstWindow();await restored.waitForFunction(()=>document.querySelector('#count').textContent==='1'&&!document.querySelector('#rotate').disabled);
