@@ -34,7 +34,7 @@ const path = require('node:path');
     await application.evaluate(({BrowserWindow})=>{BrowserWindow.getAllWindows()[0].hide();globalThis.galleryTestCallbacks['Control+Shift+V']();});
     await page.waitForFunction(()=>!document.querySelector('#capturePanel').hidden);
     assert.equal(await application.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].isVisible()),true);
-    const fixture=await page.evaluate(()=>{const c=document.createElement('canvas');c.width=800;c.height=600;const x=c.getContext('2d');x.fillStyle='#d6e6fa';x.fillRect(0,0,800,600);x.fillStyle='#e34466';x.fillRect(0,0,100,80);const data=c.toDataURL();addCapture(data);return data;});
+    const fixture=await page.evaluate(()=>{const c=document.createElement('canvas');c.width=800;c.height=600;const x=c.getContext('2d');x.fillStyle='#d6e6fa';x.fillRect(0,0,800,600);x.fillStyle='#e34466';x.fillRect(0,0,100,80);for(let y=150;y<350;y+=2)for(let xx=200;xx<500;xx+=2){x.fillStyle=(xx+y)%4?'#fff':'#111';x.fillRect(xx,y,2,2);}const data=c.toDataURL();addCapture(data);return data;});
     await page.waitForFunction(()=>!document.querySelector('#rotate').disabled);
     const original=await page.locator('#editor').evaluate(c=>c.toDataURL());
     await page.locator('#editor').focus();await page.keyboard.press('Escape');
@@ -67,6 +67,14 @@ const path = require('node:path');
     await page.click('#rotate');assert.equal(await page.locator('#editor').evaluate(c=>c.toDataURL()),original);
     await page.click('#undo');await page.waitForFunction(()=>!document.querySelector('#rotate').disabled);assert.equal(await page.locator('#editor').evaluate(c=>c.width),600);
     await page.click('#reset');await page.waitForFunction(()=>!document.querySelector('#rotate').disabled);assert.equal(await page.locator('#editor').evaluate(c=>c.toDataURL()),original);
+    await page.click('[data-tool=mosaic]');await page.fill('#weight','60');
+    for(const strength of ['weak','medium','strong']){
+      await page.selectOption('#mosaicStrength',strength);const imageBox=await page.locator('#editor').boundingBox();
+      await page.mouse.move(imageBox.x+280*imageBox.width/800,imageBox.y+200*imageBox.height/600);await page.mouse.down();await page.mouse.move(imageBox.x+350*imageBox.width/800,imageBox.y+260*imageBox.height/600,{steps:8});await page.mouse.up();
+      assert.notEqual(await page.locator('#editor').evaluate(c=>c.toDataURL()),original,'Mosaic must change pixels');
+      assert.deepEqual(await page.locator('#editor').evaluate(c=>Array.from(c.getContext('2d').getImageData(10,10,1,1).data)),[227,68,102,255]);
+      await page.click('#undo');await page.waitForFunction(()=>!document.querySelector('#cropImage').disabled);assert.equal(await page.locator('#editor').evaluate(c=>c.toDataURL()),original);
+    }
     // Only screen pixels are substituted; the Electron windows, preload, IPC,
     // native bitmap composition, keyboard handling and preset storage are real.
     await application.evaluate(({desktopCapturer,screen,nativeImage},data)=>{
@@ -110,7 +118,7 @@ const path = require('node:path');
     await application.close();application=await launch(false);
     const restored=await application.firstWindow();await restored.waitForFunction(()=>document.querySelector('#count').textContent==='1'&&!document.querySelector('#rotate').disabled);
     assert.equal(await restored.locator('[data-tool=highlighter]').getAttribute('class'),'active');assert.equal(await restored.inputValue('#weight'),'41');assert.equal(await restored.inputValue('#opacity'),'48');
-    await restored.click('[data-tool=pen]');assert.equal(await restored.inputValue('#weight'),'7');assert.equal(await restored.inputValue('#color'),'#000000');
+    await restored.click('[data-tool=pen]');assert.equal(await restored.inputValue('#weight'),'7');assert.equal(await restored.inputValue('#color'),'#000000');await restored.click('[data-tool=mosaic]');assert.equal(await restored.inputValue('#weight'),'60');assert.equal(await restored.inputValue('#mosaicStrength'),'strong');
     assert.equal(await restored.locator('#editor').evaluate(c=>c.toDataURL()),edited);assert.equal(await restored.locator('.capture-pin').getAttribute('aria-pressed'),'true');
     await application.evaluate(({desktopCapturer,screen,nativeImage},data)=>{desktopCapturer.getSources=async()=>screen.getAllDisplays().map(d=>({display_id:String(d.id),id:'screen:'+d.id,thumbnail:nativeImage.createFromDataURL(data).resize({width:Math.round(d.bounds.width*d.scaleFactor),height:Math.round(d.bounds.height*d.scaleFactor)})}));},fixture);
     const resumed=application.waitForEvent('window');await restored.click('#fixed');const resumedOverlay=await resumed;await resumedOverlay.waitForFunction(()=>document.querySelector('#captureWidth').value==='287'&&document.querySelector('#captureHeight').value==='213');
