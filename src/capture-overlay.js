@@ -72,7 +72,7 @@ function installOverlayCapture(main){
         const nativeBounds=mode==='window'?screen.dipToScreenRect(null,display.bounds):null;
         const targets=mode==='window'?localWindows(nativeWindows,windowSources,display,nativeBounds):[];
         const physicalCursor=virtual?screen.dipToScreenPoint(cursorPoint):null;
-        const entry={window,image:source.thumbnail,init:{mode,preset,presets:session.presets,visibleAreas:virtual?virtual.monitors.map(m=>({x:m.physical.x-virtual.physical.x,y:m.physical.y-virtual.physical.y,width:m.physical.width,height:m.physical.height})):null,startPoint:virtual?{x:physicalCursor.x-virtual.physical.x,y:physicalCursor.y-virtual.physical.y}:null,magnifier:options?.magnifier!==false,targets,bounds:virtual?{width:virtual.physical.width,height:virtual.physical.height}:{width:display.bounds.width,height:display.bounds.height},image:source.thumbnail.toDataURL(),imageSize:source.thumbnail.getSize()}};
+        const entry={window,image:source.thumbnail,init:{mode,preset,presets:session.presets,visibleAreas:virtual?virtual.monitors.map(m=>({x:m.physical.x-virtual.physical.x,y:m.physical.y-virtual.physical.y,width:m.physical.width,height:m.physical.height})):null,startPoint:virtual?{x:physicalCursor.x-virtual.physical.x,y:physicalCursor.y-virtual.physical.y}:null,magnifier:options?.magnifier!==false,shade:options?.shade===true,targets,bounds:virtual?{width:virtual.physical.width,height:virtual.physical.height}:{width:display.bounds.width,height:display.bounds.height},image:source.thumbnail.toDataURL(),imageSize:source.thumbnail.getSize()}};
         session.windows.push(entry);
         window.setAlwaysOnTop(true,'screen-saver');
         window.setMenu(null);window.setMenuBarVisibility(false);

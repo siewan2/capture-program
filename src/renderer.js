@@ -8,7 +8,7 @@ if(!Array.isArray(presets)||!presets.length||!presets.every(p=>presetSize(p.widt
 function status(message){$('status').textContent=message;}
 let settings;
 try { settings=JSON.parse(localStorage.getItem('settings')); } catch {}
-settings={theme:settings?.theme==='dark'?'dark':'light',magnifier:settings?.magnifier!==false,format:settings?.format==='jpeg'?'jpeg':'png',shortcuts:{region:'Control+Shift+1',window:'Control+Shift+2',fixed:'Control+Shift+3',...settings?.shortcuts}};
+settings={theme:settings?.theme==='dark'?'dark':'light',magnifier:settings?.magnifier!==false,shade:settings?.shade===true,format:settings?.format==='jpeg'?'jpeg':'png',shortcuts:{region:'Control+Shift+1',window:'Control+Shift+2',fixed:'Control+Shift+3',...settings?.shortcuts}};
 document.documentElement.dataset.theme=settings.theme;$('theme').value=settings.theme;
 $('theme').onchange=()=>{settings.theme=$('theme').value;document.documentElement.dataset.theme=settings.theme;persistSettings();$('settingsStatus').textContent='화면 스타일을 저장했습니다.';};
 function persistSettings(){localStorage.setItem('settings',JSON.stringify(settings));}
@@ -28,6 +28,8 @@ $('startupEnabled').onchange=async()=>{
   finally{$('startupEnabled').disabled=false;}
 };
 refreshStartup();
+$('captureShadeEnabled').checked=settings.shade;
+$('captureShadeEnabled').onchange=()=>{settings.shade=$('captureShadeEnabled').checked;persistSettings();$('settingsStatus').textContent='캡처 화면 음영 설정을 저장했습니다.';};
 $('magnifierEnabled').checked=settings.magnifier;
 $('magnifierEnabled').onchange=()=>{settings.magnifier=$('magnifierEnabled').checked;persistSettings();$('settingsStatus').textContent='돋보기 설정을 저장했습니다.';};
 $('captureTab').onclick=()=>showTab('capture');$('settingsTab').onclick=()=>{showTab('settings');refreshStartup();};
@@ -140,7 +142,7 @@ async function begin(mode){
   finishText(true);finishFreeform(true);busy=true;
   try{
     const preset=presets[Number($('presets').value)];
-    const data=await window.captureAPI.captureOverlay(mode,preset,{magnifier:settings.magnifier,presets});
+    const data=await window.captureAPI.captureOverlay(mode,preset,{magnifier:settings.magnifier,shade:settings.shade,presets});
     if(data){
       showTab('capture');await addCapture(data);
       try{await window.captureAPI.copyImage(data);status('캡처 이미지를 클립보드에 복사했습니다.');}

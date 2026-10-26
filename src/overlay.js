@@ -1,6 +1,13 @@
 const canvas=document.getElementById('surface'),ctx=canvas.getContext('2d'),hint=document.getElementById('hint');
 let config,image,start=null,rect=null,submitted=false,hovered=null,cursor=null,fixedDrag=null,localPresets=[];
+function paintShade(){
+  const shade=document.getElementById('shade');shade.hidden=!config.shade||config.mode==='window';if(shade.hidden)return;
+  const x=rect?rect.x/config.bounds.width*100:0,y=rect?rect.y/config.bounds.height*100:100,w=rect?rect.width/config.bounds.width*100:0,h=rect?rect.height/config.bounds.height*100:0;
+  const bands=[[0,0,100,y],[0,y,x,h],[x+w,y,100-x-w,h],[0,y+h,100,100-y-h]];
+  bands.forEach(([left,top,width,height],i)=>Object.assign(shade.children[i].style,{left:left+'%',top:top+'%',width:Math.max(0,width)+'%',height:Math.max(0,height)+'%'}));
+}
 function paint(){
+  paintShade();
   ctx.clearRect(0,0,canvas.width,canvas.height);
   if(config.mode==='window'){
     if(hovered){
