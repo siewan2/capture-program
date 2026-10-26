@@ -15,6 +15,7 @@ app.whenReady().then(async () => {
   if(!primaryInstance)return;
   main = new BrowserWindow({width:1320,height:900,show:!process.argv.includes(STARTUP_ARG),minWidth:980,minHeight:650,backgroundColor:'#f5f7fb',webPreferences:{preload:path.join(__dirname,'preload.js'),contextIsolation:true,nodeIntegration:false,sandbox:true,backgroundThrottling:false}});
   main.setMenu(null);
+  ipcMain.handle('hide-window',event=>{if(event.sender!==main.webContents)return false;main.hide();return true;});
   const pinned=createPinnedStore(path.join(app.getPath('userData'),'pinned-captures'));
   let flushedForQuit=false;
   app.on('before-quit',event=>{if(flushedForQuit)return;event.preventDefault();pinned.flush().finally(()=>{flushedForQuit=true;app.quit();});});

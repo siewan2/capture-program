@@ -415,3 +415,10 @@ document.addEventListener('keydown',event=>{
     canvas.focus({preventScroll:true});
   });
 });
+
+window.addEventListener('keydown',event=>{
+  if(event.key!=='Escape'||event.isComposing||$('capturePanel').hidden||document.querySelector('dialog[open]'))return;
+  event.preventDefault();event.stopImmediatePropagation();
+  if(drawing)finishDrawing();endZoom();
+  window.captureAPI.hideWindow().catch(error=>status('창 숨기기 실패: '+error.message));
+},true);
