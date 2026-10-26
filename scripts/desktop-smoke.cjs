@@ -21,7 +21,7 @@ const path = require('node:path');
     await application.evaluate(({BrowserWindow})=>{const main=BrowserWindow.getAllWindows()[0];main.show();main.focus();});
     const errors=[];page.on('pageerror',error=>errors.push(error.message));
     await page.waitForFunction(()=>typeof window.captureAPI?.onPresetsUpdated==='function'&&document.querySelector('#region')?.onclick);
-    const fixture=await page.evaluate(()=>{const c=document.createElement('canvas');c.width=800;c.height=600;const x=c.getContext('2d');x.fillStyle='#d6e6fa';x.fillRect(0,0,800,600);const data=c.toDataURL();addCapture(data);return data;});
+    const fixture=await page.evaluate(()=>{const c=document.createElement('canvas');c.width=800;c.height=600;const x=c.getContext('2d');x.fillStyle='#d6e6fa';x.fillRect(0,0,800,600);x.fillStyle='#e34466';x.fillRect(0,0,100,80);const data=c.toDataURL();addCapture(data);return data;});
     await page.waitForFunction(()=>!document.querySelector('#rotate').disabled);
     const original=await page.locator('#editor').evaluate(c=>c.toDataURL());
     const before=await page.locator('#editor').boundingBox(),area=await page.locator('#workspace').boundingBox();
@@ -32,6 +32,11 @@ const path = require('node:path');
     assert.equal(await page.locator('#editor').evaluate(c=>c.toDataURL()),original);assert.equal(await page.locator('#undo').isDisabled(),true);
     await page.mouse.move(area.x+30,area.y+30);await page.keyboard.down('Control');const wheelBefore=await page.locator('#editor').boundingBox();await page.mouse.wheel(0,-160);await page.waitForFunction(w=>document.querySelector('#editor').getBoundingClientRect().width>w,wheelBefore.width);const wheelLarger=await page.locator('#editor').boundingBox();await page.mouse.wheel(0,160);await page.waitForFunction(w=>document.querySelector('#editor').getBoundingClientRect().width<w,wheelLarger.width);await page.keyboard.up('Control');
     assert.equal(await page.locator('#editor').evaluate(c=>c.toDataURL()),original);
+    await page.click('#rotateLeft');assert.deepEqual(await page.locator('#editor').evaluate(c=>({width:c.width,height:c.height})),{width:600,height:800});
+    assert.deepEqual(await page.locator('#editor').evaluate(c=>Array.from(c.getContext('2d').getImageData(20,780,1,1).data)),[227,68,102,255]);
+    await page.click('#rotate');assert.equal(await page.locator('#editor').evaluate(c=>c.toDataURL()),original);
+    await page.click('#undo');await page.waitForFunction(()=>!document.querySelector('#rotate').disabled);assert.equal(await page.locator('#editor').evaluate(c=>c.width),600);
+    await page.click('#reset');await page.waitForFunction(()=>!document.querySelector('#rotate').disabled);assert.equal(await page.locator('#editor').evaluate(c=>c.toDataURL()),original);
     // Only screen pixels are substituted; the Electron windows, preload, IPC,
     // native bitmap composition, keyboard handling and preset storage are real.
     await application.evaluate(({desktopCapturer,screen,nativeImage},data)=>{
@@ -39,6 +44,8 @@ const path = require('node:path');
     },fixture);
     const opened=application.waitForEvent('window');await page.click('#fixed');const overlay=await opened;overlay.setDefaultTimeout(20000);overlay.on('pageerror',error=>errors.push(error.message));
     await overlay.waitForFunction(()=>!document.querySelector('#fixedControls').hidden);
+    assert.equal(await overlay.locator('#surface').evaluate(c=>c.getContext('2d').getImageData(0,0,1,1).data[3]),0,'No shade or repeated screenshot painting on guide canvas');
+    assert.equal(await overlay.locator('#backdrop').evaluate(img=>img.complete&&img.naturalWidth>0),true);
     await overlay.fill('#captureWidth','321');await overlay.fill('#captureHeight','213');await overlay.locator('#captureHeight').press('Enter');
     await overlay.waitForFunction(()=>document.querySelector('#hint').textContent.includes('321 × 213'));
     await overlay.click('#addCapturePreset');await overlay.waitForFunction(()=>document.querySelector('#fixedStatus').textContent.includes('프리셋을 저장'));

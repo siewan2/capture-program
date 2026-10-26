@@ -1,7 +1,7 @@
 const canvas=document.getElementById('surface'),ctx=canvas.getContext('2d'),hint=document.getElementById('hint');
 let config,image,start=null,rect=null,submitted=false,hovered=null,cursor=null,fixedDrag=null,localPresets=[];
 function paint(){
-  ctx.drawImage(image,0,0,canvas.width,canvas.height);if(config.mode!=='window'){ctx.fillStyle='#0006';ctx.fillRect(0,0,canvas.width,canvas.height);}
+  ctx.clearRect(0,0,canvas.width,canvas.height);
   if(config.mode==='window'){
     if(hovered){
       const sx=canvas.width/config.bounds.width,sy=canvas.height/config.bounds.height;
@@ -9,7 +9,7 @@ function paint(){
       ctx.strokeRect(hovered.x*sx,hovered.y*sy,hovered.width*sx,hovered.height*sy);
       hint.textContent=hovered.name+' · 클릭하여 창 캡처 · Esc 취소';
     }else hint.textContent='캡처할 창 위로 마우스를 이동하세요 · Esc 취소';
-  }else if(rect){const r=pixelRect(rect,config.bounds,config.imageSize);ctx.drawImage(image,r.x,r.y,r.width,r.height,r.x,r.y,r.width,r.height);ctx.strokeStyle='#b6a8ff';ctx.lineWidth=2*canvas.width/config.bounds.width;ctx.strokeRect(r.x,r.y,r.width,r.height);hint.textContent=`${r.width} × ${r.height} px · ${config.mode==='fixed'?'이동·크기 조절 후 Enter 또는 더블클릭':'마우스를 놓으면 캡처'} · Esc 취소`;}
+  }else if(rect){const r=pixelRect(rect,config.bounds,config.imageSize);ctx.strokeStyle='#b6a8ff';ctx.lineWidth=2*canvas.width/config.bounds.width;ctx.strokeRect(r.x,r.y,r.width,r.height);hint.textContent=`${r.width} × ${r.height} px · ${config.mode==='fixed'?'이동·크기 조절 후 Enter 또는 더블클릭':'마우스를 놓으면 캡처'} · Esc 취소`;}
   if(config.mode==='fixed'&&rect){
     const sx=canvas.width/config.bounds.width,sy=canvas.height/config.bounds.height;
     const handleSize=4*config.bounds.width/canvas.getBoundingClientRect().width;
@@ -126,7 +126,7 @@ document.oncontextmenu=e=>{if(e.target.closest('input,select'))return;e.preventD
 window.overlayAPI.onError(message=>{submitted=false;hint.textContent=message;});
 (async()=>{try{
   config=await window.overlayAPI.init();if(!config)return;
-  image=new Image();await new Promise((resolve,reject)=>{image.onload=resolve;image.onerror=reject;image.src=config.image;});
+  image=document.getElementById('backdrop');await new Promise((resolve,reject)=>{image.onload=resolve;image.onerror=reject;image.src=config.image;});
   canvas.width=config.imageSize.width;canvas.height=config.imageSize.height;if(config.mode==='fixed'){localPresets=config.presets?.length?config.presets:[config.preset];renderCapturePresets();initFixed();document.getElementById('fixedControls').hidden=false;}paint();
   if(config.mode==='window')hint.textContent='캡처할 창 위로 마우스를 이동한 후 클릭하세요 · Esc 취소';
 

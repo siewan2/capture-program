@@ -82,7 +82,7 @@ function renderGallery(){
     const remove=document.createElement('button');remove.className='capture-icon capture-delete';remove.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>';remove.title='이미지 삭제';remove.setAttribute('aria-label','이미지 삭제');remove.disabled=saving||!!item.pinPending;remove.onclick=()=>deleteItem(item);
     card.append(select,pin,remove);return card;
   }));
-  for(const id of ['rotate','undo','reset'])$(id).disabled=!current || loadingImage || (id==='undo'&&!current.history.length&&!textDraft&&!freeform);
+  for(const id of ['rotateLeft','rotate','undo','reset'])$(id).disabled=!current || loadingImage || (id==='undo'&&!current.history.length&&!textDraft&&!freeform);
   $('saveAll').disabled=!captures.length||saving;
   $('finishFreeform').disabled=!freeform;$('cancelFreeform').disabled=!freeform;
 
@@ -309,15 +309,16 @@ function eraseStroke(stroke){
   const output=ctx.getImageData(left,top,mask.width,mask.height),original=originalCanvas.getContext('2d').getImageData(left,top,mask.width,mask.height);
   restorePixels(output.data,original.data,m.getImageData(0,0,mask.width,mask.height).data);ctx.putImageData(output,left,top);
 }
-function rotateCanvas(source){const result=document.createElement('canvas');result.width=source.height;result.height=source.width;const c=result.getContext('2d');c.translate(result.width,0);c.rotate(Math.PI/2);c.drawImage(source,0,0);return result;}
+function rotateCanvas(source,direction=1){const result=document.createElement('canvas');result.width=source.height;result.height=source.width;const c=result.getContext('2d');c.translate(direction===1?result.width:0,direction===1?0:result.height);c.rotate(direction*Math.PI/2);c.drawImage(source,0,0);return result;}
 function finishDrawing(){if(zoomDrag){endZoom();return;}if(freeform)freeform.dragging=false;if(drawing){drawing=null;commit();}}canvas.onpointerup=finishDrawing;canvas.onpointercancel=finishDrawing;
 syncOptions();
 $('undo').onclick=()=>{if(freeform){finishFreeform(false);return;}if(textDraft){finishText(false);return;}if(!current?.history.length)return;const previous=current.history.pop();current.data=previous.data;current.baseData=previous.baseData;persistPinned(current);openItem(current);};
-$('rotate').onclick=()=>{
+function rotateImage(direction){
   finishText(true);finishFreeform(true);if(!current)return;checkpoint();
-  const rotated=rotateCanvas(canvas);originalCanvas=rotateCanvas(originalCanvas);current.baseData=originalCanvas.toDataURL();
+  const rotated=rotateCanvas(canvas,direction);originalCanvas=rotateCanvas(originalCanvas,direction);current.baseData=originalCanvas.toDataURL();
   canvas.width=rotated.width;canvas.height=rotated.height;ctx.drawImage(rotated,0,0);commit();
 };
+$('rotate').onclick=()=>rotateImage(1);$('rotateLeft').onclick=()=>rotateImage(-1);
 $('reset').onclick=()=>{finishText(false);finishFreeform(false);if(!current)return;checkpoint();current.data=current.originalData;current.baseData=current.originalData;current.viewZoom=1;persistPinned(current);openItem(current);};
 function pinnedSnapshot(item){return{id:item.id,name:item.name,data:item.data,originalData:item.originalData,baseData:item.baseData};}
 function persistPinned(item){if(item.pinned)window.captureAPI.putPinned(pinnedSnapshot(item)).catch(error=>status('고정 이미지 저장 실패: '+error.message));}

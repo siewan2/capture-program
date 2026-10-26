@@ -3,19 +3,19 @@ const assert=require('node:assert/strict');
 const vm=require('node:vm');
 const fs=require('node:fs');
 const {EventEmitter}=require('node:events');
-function setup(){
-  const handlers={},events={},windows=[];let hidden=false,shown=false,cropped;
+function setup(visible=false,holdLoads=false){
+  const handlers={},events={},windows=[],delays=[],loads=[];let hidden=false,shown=false,cropped;
   const displays=[{id:1,bounds:{x:-1280,y:0,width:1280,height:720},scaleFactor:1.5},{id:2,bounds:{x:0,y:0,width:1920,height:1080},scaleFactor:1}];
   class Window extends EventEmitter{
     constructor(options){super();this.options=options;this.webContents={setWindowOpenHandler(){},on(){},send(){}};windows.push(this);}
     isDestroyed(){return this.destroyed;}destroy(){this.destroyed=true;this.emit('closed');}
-    setBounds(bounds){Object.assign(this.options,bounds);}setAlwaysOnTop(){}setMenu(){}setMenuBarVisibility(){}showInactive(){}focus(){}async loadFile(){}
+    setBounds(bounds){Object.assign(this.options,bounds);}setAlwaysOnTop(){}setMenu(){}setMenuBarVisibility(){}showInactive(){}focus(){}async loadFile(){if(holdLoads)await new Promise(resolve=>loads.push(resolve));}
   }
-  const main=new EventEmitter();main.webContents={send(){}};Object.assign(main,{hide(){hidden=true;},show(){shown=true;},focus(){},isMinimized(){return false;},isDestroyed(){return false;}});
+  const main=new EventEmitter();main.webContents={send(){}};Object.assign(main,{isVisible:()=>visible,hide(){hidden=true;},show(){shown=true;},focus(){},isMinimized(){return false;},isDestroyed(){return false;}});
   const electron={nativeImage:{createFromBitmap:(_,size)=>({isEmpty:()=>false,getSize:()=>size,toDataURL:()=> 'virtual-desktop',crop(rect){cropped={id:'virtual',rect};return{toDataURL:()=> 'cropped-virtual'};}})},BrowserWindow:Window,screen:{screenToDipRect:(_,r)=>({x:r.x/1.5,y:r.y/1.5,width:r.width/1.5,height:r.height/1.5}),dipToScreenPoint:p=>({x:p.x*1.5,y:p.y*1.5}),dipToScreenRect:(_,bounds)=>({...bounds,x:bounds.x*1.5,y:bounds.y*1.5,width:bounds.width*1.5,height:bounds.height*1.5}),getAllDisplays:()=>displays,getDisplayNearestPoint:()=>displays[0],getCursorScreenPoint:()=>({x:-100,y:100}),on(){}},ipcMain:{handle:(name,fn)=>handlers[name]=fn,on:(name,fn)=>events[name]=fn},desktopCapturer:{async getSources(options){assert.equal(hidden,true);if(options.types[0]==='window')return[{id:'window:123:0',name:'Example',thumbnail:{isEmpty:()=>false,toDataURL:()=> 'full-window-image'}}];return displays.map(d=>({display_id:String(d.id),thumbnail:{isEmpty:()=>false,resize:({width,height})=>({toBitmap:()=>Buffer.alloc(width*height*4,d.id)}),getSize:()=>({width:1920,height:1080}),toDataURL:()=>`display-${d.id}`,crop(rect){cropped={id:d.id,rect};return{toDataURL:()=>`cropped-${d.id}`};}}}));}}};
   const module={exports:{}};
-  vm.runInNewContext(fs.readFileSync(require.resolve('../src/capture-overlay'),'utf8'),{require:name=>name==='electron'?electron:name==='./geometry'?require('../src/geometry'):name==='./presets'?require('../src/presets'):name==='./virtual-desktop'?require('../src/virtual-desktop'):name==='./windows-native'?{localWindows:require('../src/windows-native').localWindows,listWindows:async()=>[{handle:'123',x:50,y:50,width:600,height:400}]}:require(name),module,__dirname:require('node:path').resolve('src'),setTimeout:fn=>{fn();}});
-  return{capture:module.exports.installOverlayCapture(main),handlers,events,windows,get shown(){return shown;},get cropped(){return cropped;}};
+  vm.runInNewContext(fs.readFileSync(require.resolve('../src/capture-overlay'),'utf8'),{require:name=>name==='electron'?electron:name==='./geometry'?require('../src/geometry'):name==='./presets'?require('../src/presets'):name==='./virtual-desktop'?require('../src/virtual-desktop'):name==='./windows-native'?{localWindows:require('../src/windows-native').localWindows,listWindows:async()=>[{handle:'123',x:50,y:50,width:600,height:400}]}:require(name),module,__dirname:require('node:path').resolve('src'),setTimeout:(fn,ms)=>{delays.push(ms);fn();}});
+  return{capture:module.exports.installOverlayCapture(main),handlers,events,windows,delays,loads,get shown(){return shown;},get cropped(){return cropped;}};
 }
 async function ready(state,count=2){for(let i=0;i<30&&state.windows.length<count;i++)await Promise.resolve();assert.equal(state.windows.length,count);}
 test('overlay uses each actual display bounds and crops selected display at its own scale',async()=>{
@@ -57,4 +57,18 @@ test('fixed overlay can add/select presets and rejects unrelated renderers',asyn
   const again=s.handlers['overlay-preset']({sender},{type:'add',preset:{width:321,height:213}});assert.equal(again.presets.length,2);
   assert.equal(s.handlers['overlay-preset']({sender},{type:'select',index:0}).selected,0);
   s.events['overlay-cancel']({sender});assert.equal(await result,null);
+});
+
+test('tray capture skips compositor delay while a visible editor waits only briefly before snapshot',async()=>{
+  for(const visible of [false,true]){
+    const s=setup(visible),result=s.capture('region');await ready(s);
+    assert.deepEqual(s.delays,visible?[40]:[]);
+    s.events['overlay-cancel']({sender:s.windows[0].webContents});await result;
+  }
+});
+
+test('multiple monitor overlay files start loading together before the first load completes',async()=>{
+  const s=setup(false,true),result=s.capture('region');await ready(s);assert.equal(s.loads.length,2);
+  for(const resolve of s.loads)resolve();await Promise.resolve();
+  s.events['overlay-cancel']({sender:s.windows[0].webContents});await result;
 });

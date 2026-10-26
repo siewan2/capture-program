@@ -45,8 +45,10 @@ function installOverlayCapture(main){
     }};
     active=session;
     try{
+      const wasVisible=main.isVisible();
       main.hide();
-      await new Promise(resolve=>setTimeout(resolve,250));
+      // Only allow the compositor to remove a visible editor; tray captures need no delay.
+      if(wasVisible)await new Promise(resolve=>setTimeout(resolve,40));
       if(active!==session)return result;
       const displays=screen.getAllDisplays();
       const thumbnailSize={width:Math.max(...displays.map(d=>Math.ceil(d.bounds.width*d.scaleFactor))),height:Math.max(...displays.map(d=>Math.ceil(d.bounds.height*d.scaleFactor)))};
@@ -61,6 +63,7 @@ function installOverlayCapture(main){
       const cursorPoint=screen.getCursorScreenPoint(),cursorDisplay=screen.getDisplayNearestPoint(cursorPoint);
       const virtual=mode==='fixed'?stitchDesktop(displays,sources,screen,nativeImage):null;
       const captureDisplays=virtual?[{id:'virtual',bounds:virtual.windowBounds}]:displays;
+      const loads=[];
       for(const display of captureDisplays){
         const source=virtual?{thumbnail:virtual.image}:sources.find(s=>s.display_id===String(display.id));
         if(!source||source.thumbnail.isEmpty())throw new Error('화면을 가져오지 못했습니다. 모니터 연결과 화면 캡처 권한을 확인하세요.');
@@ -76,9 +79,10 @@ function installOverlayCapture(main){
         window.webContents.setWindowOpenHandler(()=>({action:'deny'}));
         window.webContents.on('will-navigate',event=>event.preventDefault());
         window.on('closed',()=>session.finish(null));
-        await window.loadFile(path.join(__dirname,'overlay.html'));
-        if(active!==session)return result;
+        loads.push(window.loadFile(path.join(__dirname,'overlay.html')));
       }
+      await Promise.all(loads);
+      if(active!==session)return result;
       for(const {window} of session.windows)window.showInactive();
       session.windows[virtual?0:displays.findIndex(d=>d.id===cursorDisplay.id)]?.window.focus();
       return await result;
