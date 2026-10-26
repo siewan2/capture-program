@@ -34,3 +34,11 @@ test('movement clamps to screen and extreme inward resize remains positive',()=>
   assert.deepEqual(moveRect(r,999,-999,bounds),{x:300,y:0,width:200,height:100});
   const resized=resizeRect(r,'se',-999,-999,{shift:true},bounds);assert.ok(resized.width>0&&resized.height>0);assert.equal(resized.width/resized.height,2);
 });
+
+test('remembered fixed rectangle uses global coordinates and clamps after monitor changes',()=>{
+  const {restoreFixedRect}=require('../src/geometry');
+  assert.deepEqual(restoreFixedRect({x:-1200,y:200,width:500,height:300},{x:-1920,y:0,width:3840,height:1080}),{x:720,y:200,width:500,height:300});
+  assert.deepEqual(restoreFixedRect({x:-1200,y:200,width:500,height:300},{x:0,y:0,width:1920,height:1080}),{x:0,y:200,width:500,height:300});
+  assert.deepEqual(restoreFixedRect({x:2000,y:1000,width:2500,height:1400},{x:0,y:0,width:1920,height:1080}),{x:0,y:0,width:1920,height:1080});
+  assert.equal(restoreFixedRect({x:NaN,y:1,width:100,height:100},{x:0,y:0,width:1000,height:1000}),null);
+});

@@ -17,7 +17,7 @@ function pixelRect(rect,bounds,imageSize){
   const height=Math.min(imageSize.height-y,Math.max(1,Math.round(rect.height*scaleY)));
   return{x,y,width,height};
 }
-if (typeof module !== 'undefined') module.exports = {selection, presetSize, pixelRect, moveRect, resizeRect, rectHandles, hitRect};
+if (typeof module !== 'undefined') module.exports = {selection, presetSize, pixelRect, restoreFixedRect, moveRect, resizeRect, rectHandles, hitRect};
 function moveRect(rect,dx,dy,bounds){return {...rect,x:Math.max(0,Math.min(bounds.width-rect.width,rect.x+dx)),y:Math.max(0,Math.min(bounds.height-rect.height,rect.y+dy))};}
 function resizeRect(rect,handle,dx,dy,modifiers,bounds){
   const ax=handle.includes('w')?-1:handle.includes('e')?1:0,ay=handle.includes('n')?-1:handle.includes('s')?1:0;
@@ -46,4 +46,11 @@ function hitRect(rect,p,tolerance=6){
     return 'move';
   }
   return null;
+}
+
+function restoreFixedRect(saved,physical){
+  if(!saved||![saved.x,saved.y,saved.width,saved.height].every(Number.isFinite)||saved.width<=0||saved.height<=0)return null;
+  const width=Math.min(Math.round(saved.width),physical.width),height=Math.min(Math.round(saved.height),physical.height);
+  if(width<1||height<1)return null;
+  return{x:Math.max(0,Math.min(physical.width-width,Math.round(saved.x-physical.x))),y:Math.max(0,Math.min(physical.height-height,Math.round(saved.y-physical.y))),width,height};
 }

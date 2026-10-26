@@ -8,7 +8,7 @@ if(!Array.isArray(presets)||!presets.length||!presets.every(p=>presetSize(p.widt
 function status(message){$('status').textContent=message;}
 let settings;
 try { settings=JSON.parse(localStorage.getItem('settings')); } catch {}
-settings={theme:settings?.theme==='dark'?'dark':'light',magnifier:settings?.magnifier!==false,shade:settings?.shade===true,lastFixedSize:presetSize(settings?.lastFixedSize?.width,settings?.lastFixedSize?.height)?settings.lastFixedSize:null,format:settings?.format==='jpeg'?'jpeg':'png',shortcuts:{region:'Control+Shift+1',window:'Control+Shift+2',fixed:'Control+Shift+3',gallery:'Control+Shift+4',...settings?.shortcuts}};
+settings={theme:settings?.theme==='dark'?'dark':'light',magnifier:settings?.magnifier!==false,shade:settings?.shade===true,lastFixedRect:settings?.lastFixedRect,lastFixedSize:presetSize(settings?.lastFixedSize?.width,settings?.lastFixedSize?.height)?settings.lastFixedSize:null,format:settings?.format==='jpeg'?'jpeg':'png',shortcuts:{region:'Control+Shift+1',window:'Control+Shift+2',fixed:'Control+Shift+3',gallery:'Control+Shift+4',...settings?.shortcuts}};
 document.documentElement.dataset.theme=settings.theme;$('theme').value=settings.theme;
 $('theme').onchange=()=>{settings.theme=$('theme').value;document.documentElement.dataset.theme=settings.theme;persistSettings();$('settingsStatus').textContent='화면 스타일을 저장했습니다.';};
 function persistSettings(){localStorage.setItem('settings',JSON.stringify(settings));}
@@ -60,6 +60,7 @@ for(const mode of ['region','window','fixed','gallery']){
   };
 }
 registerShortcuts();
+window.captureAPI.onFixedRectUpdated(rect=>{settings.lastFixedRect=rect;settings.lastFixedSize={width:rect.width,height:rect.height};persistSettings();});
 window.captureAPI.onPresetsUpdated(({presets:updated,selected})=>{presets=updated;renderPresets(selected);});
 window.captureAPI.onCapture(mode=>{if(mode==='gallery'){showTab('capture');return;}if(!['region','window','fixed','gallery'].includes(mode)||busy||document.querySelector('dialog[open]'))return;showTab('capture');begin(mode);});
 function renderPresets(selected=0){
@@ -141,8 +142,8 @@ async function begin(mode){
   if(busy||saving||document.querySelector('dialog[open]'))return;
   finishText(true);finishFreeform(true);busy=true;
   try{
-    const preset=mode==='fixed'&&settings.lastFixedSize?settings.lastFixedSize:presets[Number($('presets').value)];
-    const data=await window.captureAPI.captureOverlay(mode,preset,{magnifier:settings.magnifier,shade:settings.shade,presets});
+    const preset=mode==='fixed'&&presetSize(settings.lastFixedSize?.width,settings.lastFixedSize?.height)?settings.lastFixedSize:presets[Number($('presets').value)];
+    const data=await window.captureAPI.captureOverlay(mode,preset,{magnifier:settings.magnifier,shade:settings.shade,lastFixedRect:settings.lastFixedRect,presets});
     if(data){
       showTab('capture');const item=await addCapture(data);
       if(mode==='fixed'&&presetSize(item.width,item.height)){settings.lastFixedSize={width:item.width,height:item.height};persistSettings();}

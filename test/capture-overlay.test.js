@@ -11,11 +11,11 @@ function setup(visible=false,holdLoads=false){
     isDestroyed(){return this.destroyed;}destroy(){this.destroyed=true;this.emit('closed');}
     setBounds(bounds){Object.assign(this.options,bounds);}setAlwaysOnTop(){}setMenu(){}setMenuBarVisibility(){}showInactive(){}focus(){}async loadFile(){if(holdLoads)await new Promise(resolve=>loads.push(resolve));}
   }
-  const main=new EventEmitter();main.webContents={send(){}};Object.assign(main,{isVisible:()=>visible,hide(){hidden=true;},show(){shown=true;},focus(){},isMinimized(){return false;},isDestroyed(){return false;}});
+  const main=new EventEmitter();const sent=[];main.webContents={send:(...args)=>sent.push(args)};Object.assign(main,{isVisible:()=>visible,hide(){hidden=true;},show(){shown=true;},focus(){},isMinimized(){return false;},isDestroyed(){return false;}});
   const electron={nativeImage:{createFromBitmap:(_,size)=>({isEmpty:()=>false,getSize:()=>size,toDataURL:()=> 'virtual-desktop',crop(rect){cropped={id:'virtual',rect};return{toDataURL:()=> 'cropped-virtual'};}})},BrowserWindow:Window,screen:{screenToDipRect:(_,r)=>({x:r.x/1.5,y:r.y/1.5,width:r.width/1.5,height:r.height/1.5}),dipToScreenPoint:p=>({x:p.x*1.5,y:p.y*1.5}),dipToScreenRect:(_,bounds)=>({...bounds,x:bounds.x*1.5,y:bounds.y*1.5,width:bounds.width*1.5,height:bounds.height*1.5}),getAllDisplays:()=>displays,getDisplayNearestPoint:()=>displays[0],getCursorScreenPoint:()=>({x:-100,y:100}),on(){}},ipcMain:{handle:(name,fn)=>handlers[name]=fn,on:(name,fn)=>events[name]=fn},desktopCapturer:{async getSources(options){assert.equal(hidden,true);if(options.types[0]==='window')return[{id:'window:123:0',name:'Example',thumbnail:{isEmpty:()=>false,toDataURL:()=> 'full-window-image'}}];return displays.map(d=>({display_id:String(d.id),thumbnail:{isEmpty:()=>false,resize:({width,height})=>({toBitmap:()=>Buffer.alloc(width*height*4,d.id)}),getSize:()=>({width:1920,height:1080}),toDataURL:()=>`display-${d.id}`,crop(rect){cropped={id:d.id,rect};return{toDataURL:()=>`cropped-${d.id}`};}}}));}}};
   const module={exports:{}};
   vm.runInNewContext(fs.readFileSync(require.resolve('../src/capture-overlay'),'utf8'),{require:name=>name==='electron'?electron:name==='./geometry'?require('../src/geometry'):name==='./presets'?require('../src/presets'):name==='./virtual-desktop'?require('../src/virtual-desktop'):name==='./windows-native'?{localWindows:require('../src/windows-native').localWindows,listWindows:async()=>[{handle:'123',x:50,y:50,width:600,height:400}]}:require(name),module,__dirname:require('node:path').resolve('src'),setTimeout:(fn,ms)=>{delays.push(ms);fn();}});
-  return{capture:module.exports.installOverlayCapture(main),handlers,events,windows,delays,loads,get shown(){return shown;},get cropped(){return cropped;}};
+  return{capture:module.exports.installOverlayCapture(main),handlers,events,windows,delays,loads,sent,get shown(){return shown;},get cropped(){return cropped;}};
 }
 async function ready(state,count=2){for(let i=0;i<30&&state.windows.length<count;i++)await Promise.resolve();assert.equal(state.windows.length,count);}
 test('overlay uses each actual display bounds and crops selected display at its own scale',async()=>{
@@ -71,4 +71,15 @@ test('multiple monitor overlay files start loading together before the first loa
   const s=setup(false,true),result=s.capture('region');await ready(s);assert.equal(s.loads.length,2);
   for(const resolve of s.loads)resolve();await Promise.resolve();
   s.events['overlay-cancel']({sender:s.windows[0].webContents});await result;
+});
+
+test('fixed adjustments and cancellation remember global physical rectangle, then restore the same position',async()=>{
+  const s=setup(),first=s.capture('fixed',{width:640,height:480});await ready(s,1);const sender=s.windows[0].webContents;
+  s.events['overlay-state']({sender:{}},{x:5,y:10,width:287,height:213});assert.equal(s.sent.length,0);
+  s.events['overlay-state']({sender},{x:2200,y:120,width:287,height:213});assert.equal(s.sent[0][0],'fixed-rect-updated');
+  assert.deepEqual(JSON.parse(JSON.stringify(s.sent[0][1])),{x:280,y:120,width:287,height:213});
+  s.events['overlay-cancel']({sender},{x:2210,y:130,width:287,height:213});assert.equal(await first,null);
+  const remembered=s.sent.at(-1)[1],second=s.capture('fixed',{width:640,height:480},{lastFixedRect:remembered});await ready(s,2);
+  assert.deepEqual(JSON.parse(JSON.stringify(s.handlers['overlay-init']({sender:s.windows[1].webContents}).initialRect)),{x:2210,y:130,width:287,height:213});
+  s.events['overlay-cancel']({sender:s.windows[1].webContents});await second;
 });

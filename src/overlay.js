@@ -43,7 +43,10 @@ function magnify(p){
 function hoverWindow(p){hovered=(config.targets||[]).find(w=>p.x>=w.x&&p.y>=w.y&&p.x<w.x+w.width&&p.y<w.y+w.height)||null;}
 function point(e){const bounds=canvas.getBoundingClientRect();return{x:Math.max(0,Math.min(config.bounds.width,(e.clientX-bounds.left)*config.bounds.width/bounds.width)),y:Math.max(0,Math.min(config.bounds.height,(e.clientY-bounds.top)*config.bounds.height/bounds.height))};}
 function fixedHit(p){return rect&&hitRect(rect,p,6*config.bounds.width/canvas.getBoundingClientRect().width);}
+function rememberFixed(){if(config?.mode==='fixed'&&rect)window.overlayAPI.remember?.(rect);}
+function cancelCapture(){window.overlayAPI.cancel(config?.mode==='fixed'?rect:null);}
 function initFixed(){
+  if(config.initialRect){rect={...config.initialRect};return;}
   const width=config.preset.width*config.bounds.width/config.imageSize.width,height=config.preset.height*config.bounds.height/config.imageSize.height;
   const scale=Math.min(1,config.bounds.width/width,config.bounds.height/height);
   const center=config.startPoint||{x:config.bounds.width/2,y:config.bounds.height/2};
@@ -62,7 +65,7 @@ function setCaptureSize(width,height){
   if(!presetSize(width,height))throw new Error('가로·세로는 1~16384 사이 정수로 입력하세요.');
   if(width>config.imageSize.width||height>config.imageSize.height)throw new Error('전체 모니터 화면보다 큰 크기는 적용할 수 없습니다.');
   const w=width*config.bounds.width/config.imageSize.width,h=height*config.bounds.height/config.imageSize.height,cx=rect.x+rect.width/2,cy=rect.y+rect.height/2;
-  rect={x:Math.max(0,Math.min(config.bounds.width-w,cx-w/2)),y:Math.max(0,Math.min(config.bounds.height-h,cy-h/2)),width:w,height:h};paint();
+  rect={x:Math.max(0,Math.min(config.bounds.width-w,cx-w/2)),y:Math.max(0,Math.min(config.bounds.height-h,cy-h/2)),width:w,height:h};paint();rememberFixed();
 }
 function readCaptureSize(){return{width:Number(document.getElementById('captureWidth').value),height:Number(document.getElementById('captureHeight').value)};}
 function applyCaptureSize(){try{const size=readCaptureSize();setCaptureSize(size.width,size.height);document.getElementById('fixedStatus').textContent='크기를 적용했습니다.';return size;}catch(error){document.getElementById('fixedStatus').textContent=error.message;return null;}}
@@ -111,7 +114,7 @@ canvas.onpointermove=e=>{
   rect=next.width>=1&&next.height>=1?next:null;paint();
 };
 canvas.onpointerup=e=>{
-  if(config?.mode==='fixed'){fixedDrag=null;fixedCursor(point(e));return;}
+  if(config?.mode==='fixed'){fixedDrag=null;fixedCursor(point(e));rememberFixed();return;}
   if(!start||submitted)return;
   const next=selection(start,point(e),config.bounds.width,config.bounds.height);start=null;
   rect=next.width>=1&&next.height>=1?next:null;
@@ -120,21 +123,21 @@ canvas.onpointerup=e=>{
 canvas.onpointerleave=()=>{document.getElementById('magnifier').hidden=true;cursor=null;if(image?.complete)paint();};
 canvas.onpointercancel=()=>{if(config?.mode==='fixed'){fixedDrag=null;return;}start=null;rect=null;if(config)paint();};
 canvas.ondblclick=e=>{if(config?.mode==='fixed'){e.preventDefault();submit();}};
-document.getElementById('fixedCapture').onclick=submit;document.getElementById('fixedCancel').onclick=()=>window.overlayAPI.cancel();
+document.getElementById('fixedCapture').onclick=submit;document.getElementById('fixedCancel').onclick=()=>cancelCapture();
 document.onkeydown=e=>{
-  if(e.key==='Escape')window.overlayAPI.cancel();
+  if(e.key==='Escape')cancelCapture();
   if(config?.mode!=='fixed'||!rect||submitted)return;
   if(e.target.closest('input,select,button')){if(e.key==='Enter'&&e.target.matches('input')){e.preventDefault();applyCaptureSize();}return;}
   if(e.key==='Enter'){e.preventDefault();submit();return;}
   const directions={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]};
-  const d=directions[e.key];if(d){e.preventDefault();const step=e.shiftKey?10:1;rect=moveRect(rect,d[0]*step*config.bounds.width/config.imageSize.width,d[1]*step*config.bounds.height/config.imageSize.height,config.bounds);paint();if(cursor)fixedCursor(cursor);}
+  const d=directions[e.key];if(d){e.preventDefault();const step=e.shiftKey?10:1;rect=moveRect(rect,d[0]*step*config.bounds.width/config.imageSize.width,d[1]*step*config.bounds.height/config.imageSize.height,config.bounds);paint();rememberFixed();if(cursor)fixedCursor(cursor);}
 };
-document.oncontextmenu=e=>{if(e.target.closest('input,select'))return;e.preventDefault();window.overlayAPI.cancel();};
+document.oncontextmenu=e=>{if(e.target.closest('input,select'))return;e.preventDefault();cancelCapture();};
 window.overlayAPI.onError(message=>{submitted=false;hint.textContent=message;});
 (async()=>{try{
   config=await window.overlayAPI.init();if(!config)return;
   image=document.getElementById('backdrop');await new Promise((resolve,reject)=>{image.onload=resolve;image.onerror=reject;image.src=config.image;});
-  canvas.width=config.imageSize.width;canvas.height=config.imageSize.height;if(config.mode==='fixed'){localPresets=config.presets?.length?config.presets:[config.preset];renderCapturePresets();initFixed();document.getElementById('fixedControls').hidden=false;}paint();
+  canvas.width=config.imageSize.width;canvas.height=config.imageSize.height;if(config.mode==='fixed'){localPresets=config.presets?.length?config.presets:[config.preset];renderCapturePresets();initFixed();document.getElementById('fixedControls').hidden=false;}paint();rememberFixed();
   if(config.mode==='window')hint.textContent='캡처할 창 위로 마우스를 이동한 후 클릭하세요 · Esc 취소';
 
 }catch{hint.textContent='화면을 표시하지 못했습니다. Esc로 취소하세요.';}})();

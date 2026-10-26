@@ -3,7 +3,7 @@ const path=require('node:path');
 const {listWindows,localWindows}=require('./windows-native');
 const {updatePresets}=require('./presets');
 const {stitchDesktop}=require('./virtual-desktop');
-const {pixelRect,presetSize}=require('./geometry');
+const {pixelRect,presetSize,restoreFixedRect}=require('./geometry');
 let active=null;
 function installOverlayCapture(main){
   ipcMain.handle('overlay-init',event=>active?.windows.find(entry=>entry.window.webContents===event.sender)?.init??null);
@@ -12,7 +12,13 @@ function installOverlayCapture(main){
     if(!entry||entry.init.mode!=='fixed')throw new Error('지정 크기 캡처에서만 프리셋을 변경할 수 있습니다.');
     const result=updatePresets(active.presets,action);active.presets=result.presets;main.webContents.send('presets-updated',result);return result;
   });
-  ipcMain.on('overlay-cancel',event=>{if(active?.windows.some(entry=>entry.window.webContents===event.sender))active.finish(null);});
+  function remember(entry,rect){
+    if(entry.init.mode!=='fixed'||!rect)return;
+    const crop=pixelRect(rect,entry.init.bounds,entry.image.getSize());
+    main.webContents.send('fixed-rect-updated',{x:entry.origin.x+crop.x,y:entry.origin.y+crop.y,width:crop.width,height:crop.height});
+  }
+  ipcMain.on('overlay-state',(event,rect)=>{const entry=active?.windows.find(entry=>entry.window.webContents===event.sender);if(entry)try{remember(entry,rect);}catch{}});
+  ipcMain.on('overlay-cancel',(event,rect)=>{const entry=active?.windows.find(entry=>entry.window.webContents===event.sender);if(entry){try{remember(entry,rect);}catch{}active.finish(null);}});
   ipcMain.on('overlay-select',(event,rect)=>{
     const entry=active?.windows.find(entry=>entry.window.webContents===event.sender);
     if(!entry)return;
@@ -24,7 +30,7 @@ function installOverlayCapture(main){
         active.finish(source.thumbnail.toDataURL());return;
       }
       const crop=pixelRect(rect,entry.init.bounds,entry.image.getSize());
-      active.finish(entry.image.crop(crop).toDataURL());
+      remember(entry,rect);active.finish(entry.image.crop(crop).toDataURL());
     }catch(error){entry.window.webContents.send('overlay-error',error.message);}
   });
   main.on('closed',()=>active?.finish(null));
@@ -72,7 +78,7 @@ function installOverlayCapture(main){
         const nativeBounds=mode==='window'?screen.dipToScreenRect(null,display.bounds):null;
         const targets=mode==='window'?localWindows(nativeWindows,windowSources,display,nativeBounds):[];
         const physicalCursor=virtual?screen.dipToScreenPoint(cursorPoint):null;
-        const entry={window,image:source.thumbnail,init:{mode,preset,presets:session.presets,visibleAreas:virtual?virtual.monitors.map(m=>({x:m.physical.x-virtual.physical.x,y:m.physical.y-virtual.physical.y,width:m.physical.width,height:m.physical.height})):null,startPoint:virtual?{x:physicalCursor.x-virtual.physical.x,y:physicalCursor.y-virtual.physical.y}:null,magnifier:options?.magnifier!==false,shade:options?.shade===true,targets,bounds:virtual?{width:virtual.physical.width,height:virtual.physical.height}:{width:display.bounds.width,height:display.bounds.height},image:source.thumbnail.toDataURL(),imageSize:source.thumbnail.getSize()}};
+        const entry={window,image:source.thumbnail,origin:virtual?virtual.physical:null,init:{mode,preset,initialRect:virtual?restoreFixedRect(options.lastFixedRect,virtual.physical):null,desktopOrigin:virtual?{x:virtual.physical.x,y:virtual.physical.y}:null,presets:session.presets,visibleAreas:virtual?virtual.monitors.map(m=>({x:m.physical.x-virtual.physical.x,y:m.physical.y-virtual.physical.y,width:m.physical.width,height:m.physical.height})):null,startPoint:virtual?{x:physicalCursor.x-virtual.physical.x,y:physicalCursor.y-virtual.physical.y}:null,magnifier:options?.magnifier!==false,shade:options?.shade===true,targets,bounds:virtual?{width:virtual.physical.width,height:virtual.physical.height}:{width:display.bounds.width,height:display.bounds.height},image:source.thumbnail.toDataURL(),imageSize:source.thumbnail.getSize()}};
         session.windows.push(entry);
         window.setAlwaysOnTop(true,'screen-saver');
         window.setMenu(null);window.setMenuBarVisibility(false);
