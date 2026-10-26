@@ -381,3 +381,16 @@ document.addEventListener('keydown',async event=>{
   try{await window.captureAPI.copyImage(current.data);status('선택한 이미지를 클립보드에 복사했습니다.');}
   catch(error){status('이미지 복사 실패: '+error.message);}
 });
+
+document.addEventListener('keydown',event=>{
+  if(!['ArrowUp','ArrowDown'].includes(event.key)||event.ctrlKey||event.metaKey||event.altKey||event.shiftKey||event.isComposing)return;
+  if(event.target.closest('input,textarea,select,[contenteditable]:not([contenteditable="false"]),[role="textbox"]')||document.querySelector('dialog[open]')||$('capturePanel').hidden||busy||saving||drawing||freeform||textDraft||!captures.length)return;
+  event.preventDefault();
+  const index=captures.indexOf(current),next=captures[index<0?0:Math.max(0,Math.min(captures.length-1,index+(event.key==='ArrowDown'?1:-1)))];
+  if(next===current)return;
+  openItem(next).then(()=>{
+    if(current!==next)return;
+    $('gallery').querySelector('.capture.selected')?.scrollIntoView({block:'nearest',inline:'nearest'});
+    canvas.focus({preventScroll:true});
+  });
+});
