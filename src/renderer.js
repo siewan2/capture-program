@@ -8,7 +8,7 @@ if(!Array.isArray(presets)||!presets.length||!presets.every(p=>presetSize(p.widt
 function status(message){$('status').textContent=message;}
 let settings;
 try { settings=JSON.parse(localStorage.getItem('settings')); } catch {}
-settings={theme:settings?.theme==='dark'?'dark':'light',magnifier:settings?.magnifier!==false,shade:settings?.shade===true,format:settings?.format==='jpeg'?'jpeg':'png',shortcuts:{region:'Control+Shift+1',window:'Control+Shift+2',fixed:'Control+Shift+3',gallery:'Control+Shift+4',...settings?.shortcuts}};
+settings={theme:settings?.theme==='dark'?'dark':'light',magnifier:settings?.magnifier!==false,shade:settings?.shade===true,lastFixedSize:presetSize(settings?.lastFixedSize?.width,settings?.lastFixedSize?.height)?settings.lastFixedSize:null,format:settings?.format==='jpeg'?'jpeg':'png',shortcuts:{region:'Control+Shift+1',window:'Control+Shift+2',fixed:'Control+Shift+3',gallery:'Control+Shift+4',...settings?.shortcuts}};
 document.documentElement.dataset.theme=settings.theme;$('theme').value=settings.theme;
 $('theme').onchange=()=>{settings.theme=$('theme').value;document.documentElement.dataset.theme=settings.theme;persistSettings();$('settingsStatus').textContent='화면 스타일을 저장했습니다.';};
 function persistSettings(){localStorage.setItem('settings',JSON.stringify(settings));}
@@ -93,8 +93,8 @@ async function openItem(item){
   finishText(true);finishFreeform(true);current=item;
   const revision=++imageRevision;loadingImage=true;renderGallery();
   try{
-    const [img,base]=await Promise.all([loadImage(item.data),loadImage(item.baseData)]);if(current!==item||revision!==imageRevision)return;
-    item.width=img.width;item.height=img.height;canvas.width=img.width;canvas.height=img.height;ctx.drawImage(img,0,0);
+    const [img,base]=await Promise.all([loadImage(item.data),loadImage(item.baseData)]);item.width=img.width;item.height=img.height;if(current!==item||revision!==imageRevision)return;
+    canvas.width=img.width;canvas.height=img.height;ctx.drawImage(img,0,0);
     originalCanvas=document.createElement('canvas');originalCanvas.width=base.width;originalCanvas.height=base.height;originalCanvas.getContext('2d').drawImage(base,0,0);
     canvas.hidden=false;$('empty').hidden=true;applyViewScale();status(`${item.name} · ${img.width} × ${img.height} px`);
   }catch(error){if(revision===imageRevision)status('이미지 열기 실패: '+error.message);}
@@ -135,16 +135,17 @@ window.addEventListener('keydown',event=>{if(event.key==='Control')controlDown=t
 window.addEventListener('blur',()=>{controlDown=false;endZoom();});
 function checkpoint(){current.history.push({data:current.data,baseData:current.baseData});if(current.history.length>20)current.history.shift();}
 function commit(){applyViewScale();current.data=canvas.toDataURL('image/png');current.width=canvas.width;current.height=canvas.height;persistPinned(current);renderGallery();}
-function addCapture(data){const item={id:crypto.randomUUID(),data,originalData:data,baseData:data,name:`캡처 ${new Date().toLocaleTimeString('ko-KR')}`,history:[]};captures.unshift(item);return openItem(item);}
+async function addCapture(data){const item={id:crypto.randomUUID(),data,originalData:data,baseData:data,name:`캡처 ${new Date().toLocaleTimeString('ko-KR')}`,history:[]};captures.unshift(item);await openItem(item);return item;}
 function point(event,target){const r=target.getBoundingClientRect();return{x:Math.max(0,Math.min(target.width,(event.clientX-r.left)*target.width/r.width)),y:Math.max(0,Math.min(target.height,(event.clientY-r.top)*target.height/r.height))};}
 async function begin(mode){
   if(busy||saving||document.querySelector('dialog[open]'))return;
   finishText(true);finishFreeform(true);busy=true;
   try{
-    const preset=presets[Number($('presets').value)];
+    const preset=mode==='fixed'&&settings.lastFixedSize?settings.lastFixedSize:presets[Number($('presets').value)];
     const data=await window.captureAPI.captureOverlay(mode,preset,{magnifier:settings.magnifier,shade:settings.shade,presets});
     if(data){
-      showTab('capture');await addCapture(data);
+      showTab('capture');const item=await addCapture(data);
+      if(mode==='fixed'&&presetSize(item.width,item.height)){settings.lastFixedSize={width:item.width,height:item.height};persistSettings();}
       try{await window.captureAPI.copyImage(data);status('캡처 이미지를 클립보드에 복사했습니다.');}
       catch(error){status(`캡처 완료 · 클립보드 복사 실패: ${error.message}`);}
     }else status('캡처를 취소했습니다.');
