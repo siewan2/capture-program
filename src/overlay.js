@@ -16,11 +16,11 @@ function paint(){
       ctx.strokeRect(hovered.x*sx,hovered.y*sy,hovered.width*sx,hovered.height*sy);
       hint.textContent=hovered.name+' · 클릭하여 창 캡처 · Esc 취소';
     }else hint.textContent='캡처할 창 위로 마우스를 이동하세요 · Esc 취소';
-  }else if(rect){const r=pixelRect(rect,config.bounds,config.imageSize);ctx.strokeStyle='#b6a8ff';ctx.lineWidth=2*canvas.width/config.bounds.width;ctx.strokeRect(r.x,r.y,r.width,r.height);hint.textContent=`${r.width} × ${r.height} px · ${config.mode==='fixed'?'이동·크기 조절 후 Enter 또는 더블클릭':'마우스를 놓으면 캡처'} · Esc 취소`;}
+  }else if(rect){const r=pixelRect(rect,config.bounds,config.imageSize);ctx.strokeStyle='#ff3030';ctx.lineWidth=1;ctx.strokeRect(r.x+.5,r.y+.5,Math.max(0,r.width-1),Math.max(0,r.height-1));hint.textContent=`${r.width} × ${r.height} px · ${config.mode==='fixed'?'이동·크기 조절 후 Enter 또는 더블클릭':'마우스를 놓으면 캡처'} · Esc 취소`;}
   if(config.mode==='fixed'&&rect){
     const sx=canvas.width/config.bounds.width,sy=canvas.height/config.bounds.height;
     const handleSize=4*config.bounds.width/canvas.getBoundingClientRect().width;
-    ctx.save();ctx.fillStyle='#fff';ctx.strokeStyle='#6559ec';ctx.lineWidth=sx;
+    ctx.save();ctx.fillStyle='#fff';ctx.strokeStyle='#ff3030';ctx.lineWidth=1;
     for(const handle of rectHandles(rect)){ctx.fillRect((handle.x-handleSize)*sx,(handle.y-handleSize)*sy,2*handleSize*sx,2*handleSize*sy);ctx.strokeRect((handle.x-handleSize)*sx,(handle.y-handleSize)*sy,2*handleSize*sx,2*handleSize*sy);}ctx.restore();syncFixedInputs();positionFixedUI();
   }
   if(config.mode==='region'&&cursor){

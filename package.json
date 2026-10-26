@@ -1,6 +1,6 @@
 {
   "name": "capture-program",
-  "version": "0.14.0",
+  "version": "0.14.1",
   "private": true,
   "description": "Windows screen capture and annotation app",
   "main": "src/main.js",
