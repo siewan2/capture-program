@@ -78,7 +78,9 @@ function renderGallery(){
     const img=document.createElement('img');img.src=item.data;img.alt=item.name;
     select.title=`${item.name} · 우클릭: 저장 / 삭제`;select.append(img);select.onclick=()=>openItem(item);
     select.oncontextmenu=event=>{event.preventDefault();openItem(item);window.captureAPI.contextMenu(item.id,saving);};
-    card.append(select);return card;
+    const pin=document.createElement('button');pin.className='capture-icon capture-pin';pin.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 3 8 0-1 6 4 4v2h-6v6l-1 2-1-2v-6H5v-2l4-4z"/></svg>';pin.title=item.pinned?'고정 해제':'고정 · 재실행 후에도 유지';pin.setAttribute('aria-label',pin.title);pin.setAttribute('aria-pressed',String(!!item.pinned));pin.disabled=!!item.pinPending;pin.onclick=()=>togglePin(item);
+    const remove=document.createElement('button');remove.className='capture-icon capture-delete';remove.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>';remove.title='이미지 삭제';remove.setAttribute('aria-label','이미지 삭제');remove.disabled=saving||!!item.pinPending;remove.onclick=()=>deleteItem(item);
+    card.append(select,pin,remove);return card;
   }));
   for(const id of ['rotate','undo','reset'])$(id).disabled=!current || loadingImage || (id==='undo'&&!current.history.length&&!textDraft&&!freeform);
   $('saveAll').disabled=!captures.length||saving;
@@ -106,6 +108,14 @@ function applyViewScale(){
 new ResizeObserver(applyViewScale).observe($('workspace'));
 function endZoom(){if(!zoomDrag)return;const id=zoomDrag.pointerId;zoomDrag=null;try{if($('workspace').hasPointerCapture(id))$('workspace').releasePointerCapture(id);}catch{}canvas.style.cursor=tool==='text'?'text':tool==='select'?'default':'crosshair';}
 const workspace=$('workspace');
+workspace.addEventListener('wheel',event=>{
+  if(!event.ctrlKey||!current||loadingImage||event.target.closest('input,textarea,button,select'))return;
+  event.preventDefault();event.stopImmediatePropagation();finishText(true);finishFreeform(true);
+  const delta=event.deltaY*(event.deltaMode===1?16:event.deltaMode===2?workspace.clientHeight:1);
+  if(!delta)return;
+  current.viewZoom=Math.max(.1,Math.min(8,(current.viewZoom||1)*Math.exp(-Math.max(-300,Math.min(300,delta))/500)));
+  applyViewScale();status(`보기 배율 ${Math.round(current.viewZoom*100)}% · Ctrl+휠 또는 Ctrl+드래그로 조절`);
+},{passive:false,capture:true});
 workspace.addEventListener('pointerdown',event=>{
   if(!current||loadingImage||event.button!==0||!(event.ctrlKey||controlDown||event.getModifierState?.('Control')))return;
   if(event.target!==canvas&&event.target!==workspace)return;
@@ -122,7 +132,7 @@ for(const type of ['pointerup','pointercancel'])window.addEventListener(type,eve
 window.addEventListener('keydown',event=>{if(event.key==='Control')controlDown=true;});window.addEventListener('keyup',event=>{if(event.key==='Control')controlDown=false;});
 window.addEventListener('blur',()=>{controlDown=false;endZoom();});
 function checkpoint(){current.history.push({data:current.data,baseData:current.baseData});if(current.history.length>20)current.history.shift();}
-function commit(){applyViewScale();current.data=canvas.toDataURL('image/png');current.width=canvas.width;current.height=canvas.height;renderGallery();}
+function commit(){applyViewScale();current.data=canvas.toDataURL('image/png');current.width=canvas.width;current.height=canvas.height;persistPinned(current);renderGallery();}
 function addCapture(data){const item={id:crypto.randomUUID(),data,originalData:data,baseData:data,name:`캡처 ${new Date().toLocaleTimeString('ko-KR')}`,history:[]};captures.unshift(item);return openItem(item);}
 function point(event,target){const r=target.getBoundingClientRect();return{x:Math.max(0,Math.min(target.width,(event.clientX-r.left)*target.width/r.width)),y:Math.max(0,Math.min(target.height,(event.clientY-r.top)*target.height/r.height))};}
 async function begin(mode){
@@ -302,14 +312,30 @@ function eraseStroke(stroke){
 function rotateCanvas(source){const result=document.createElement('canvas');result.width=source.height;result.height=source.width;const c=result.getContext('2d');c.translate(result.width,0);c.rotate(Math.PI/2);c.drawImage(source,0,0);return result;}
 function finishDrawing(){if(zoomDrag){endZoom();return;}if(freeform)freeform.dragging=false;if(drawing){drawing=null;commit();}}canvas.onpointerup=finishDrawing;canvas.onpointercancel=finishDrawing;
 syncOptions();
-$('undo').onclick=()=>{if(freeform){finishFreeform(false);return;}if(textDraft){finishText(false);return;}if(!current?.history.length)return;const previous=current.history.pop();current.data=previous.data;current.baseData=previous.baseData;openItem(current);};
+$('undo').onclick=()=>{if(freeform){finishFreeform(false);return;}if(textDraft){finishText(false);return;}if(!current?.history.length)return;const previous=current.history.pop();current.data=previous.data;current.baseData=previous.baseData;persistPinned(current);openItem(current);};
 $('rotate').onclick=()=>{
   finishText(true);finishFreeform(true);if(!current)return;checkpoint();
   const rotated=rotateCanvas(canvas);originalCanvas=rotateCanvas(originalCanvas);current.baseData=originalCanvas.toDataURL();
   canvas.width=rotated.width;canvas.height=rotated.height;ctx.drawImage(rotated,0,0);commit();
 };
-$('reset').onclick=()=>{finishText(false);finishFreeform(false);if(!current)return;checkpoint();current.data=current.originalData;current.baseData=current.originalData;current.viewZoom=1;openItem(current);};
-function deleteItem(item){
+$('reset').onclick=()=>{finishText(false);finishFreeform(false);if(!current)return;checkpoint();current.data=current.originalData;current.baseData=current.originalData;current.viewZoom=1;persistPinned(current);openItem(current);};
+function pinnedSnapshot(item){return{id:item.id,name:item.name,data:item.data,originalData:item.originalData,baseData:item.baseData};}
+function persistPinned(item){if(item.pinned)window.captureAPI.putPinned(pinnedSnapshot(item)).catch(error=>status('고정 이미지 저장 실패: '+error.message));}
+async function togglePin(item){
+  if(item.pinPending)return;
+  if(current===item){finishText(true);finishFreeform(true);}
+  const wasPinned=!!item.pinned;item.pinPending=true;item.pinned=!wasPinned;renderGallery();
+  try{if(item.pinned)await window.captureAPI.putPinned(pinnedSnapshot(item));else await window.captureAPI.removePinned(item.id);status(item.pinned?'이미지를 고정했습니다. 다음 실행에도 복원됩니다.':'고정을 해제했습니다. 다음 실행에는 복원되지 않습니다.');}
+  catch(error){item.pinned=wasPinned;status('핀 설정 실패: '+error.message);}
+  finally{item.pinPending=false;renderGallery();}
+}
+async function restorePinned(){
+  try{const result=await window.captureAPI.listPinned();const restored=result.items.filter(item=>!captures.some(existing=>existing.id===item.id)).map(item=>({...item,pinned:true,history:[]}));captures.push(...restored);if(!current&&captures.length)await openItem(captures[0]);else renderGallery();if(result.failed)status(`고정 이미지 ${result.failed}개를 읽지 못했습니다. 나머지 이미지는 복원했습니다.`);}
+  catch(error){status('고정 이미지 복원 실패: '+error.message);}
+}
+async function deleteItem(item){
+  if(item.pinPending)return;
+  if(item.pinned){item.pinned=false;item.pinPending=true;renderGallery();try{await window.captureAPI.removePinned(item.id);}catch(error){item.pinned=true;item.pinPending=false;renderGallery();status('고정 이미지 삭제 실패: '+error.message);return;}item.pinPending=false;}
   if(current===item){finishText(false);finishFreeform(false);}
   const index=captures.indexOf(item);if(index<0)return;captures.splice(index,1);
   if(current===item){current=null;if(captures.length){openItem(captures[Math.min(index,captures.length-1)]);return;}canvas.hidden=true;$('empty').hidden=false;}
@@ -342,6 +368,7 @@ async function saveItems(items,all=false){
 }
 $('saveAll').onclick=()=>saveItems(captures,true);
 renderGallery();
+restorePinned();
 
 document.addEventListener('keydown',async event=>{
   const target=event.target;

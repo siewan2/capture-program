@@ -9,7 +9,7 @@ const path = require('node:path');
   try {
     application = await electron.launch({executablePath:require('electron'),args:[path.resolve(__dirname,'..'),'--startup-hidden',`--user-data-dir=${profile}`],timeout:60000});
     if(process.platform==='win32')await application.evaluate(({app})=>{
-      const options={name:'CaptureProgram',path:process.execPath,args:['--startup-hidden']};
+      const options={path:process.execPath,args:['--startup-hidden']};
       try{
         app.setLoginItemSettings({...options,openAtLogin:true});
         if(!app.getLoginItemSettings(options).openAtLogin)throw new Error('Windows startup registration failed');
@@ -30,6 +30,8 @@ const path = require('node:path');
     await page.keyboard.down('Control');await page.mouse.move(enlarged.x+30,enlarged.y+30);await page.mouse.down();await page.mouse.move(enlarged.x+30,enlarged.y+210,{steps:10});await page.mouse.up();await page.keyboard.up('Control');
     assert.ok((await page.locator('#editor').boundingBox()).width<enlarged.width*.7,'Ctrl+vertical drag must shrink the image');
     assert.equal(await page.locator('#editor').evaluate(c=>c.toDataURL()),original);assert.equal(await page.locator('#undo').isDisabled(),true);
+    await page.mouse.move(area.x+30,area.y+30);await page.keyboard.down('Control');const wheelBefore=await page.locator('#editor').boundingBox();await page.mouse.wheel(0,-160);await page.waitForFunction(w=>document.querySelector('#editor').getBoundingClientRect().width>w,wheelBefore.width);const wheelLarger=await page.locator('#editor').boundingBox();await page.mouse.wheel(0,160);await page.waitForFunction(w=>document.querySelector('#editor').getBoundingClientRect().width<w,wheelLarger.width);await page.keyboard.up('Control');
+    assert.equal(await page.locator('#editor').evaluate(c=>c.toDataURL()),original);
     // Only screen pixels are substituted; the Electron windows, preload, IPC,
     // native bitmap composition, keyboard handling and preset storage are real.
     await application.evaluate(({desktopCapturer,screen,nativeImage},data)=>{
@@ -49,7 +51,18 @@ const path = require('node:path');
     assert.equal(await application.evaluate(({clipboard,nativeImage},data)=>clipboard.readImage().toBitmap().equals(nativeImage.createFromDataURL(data).toBitmap()),await page.locator('#editor').evaluate(c=>c.toDataURL())),true);
     const cancelled=application.waitForEvent('window');await page.click('#region');const cancelledOverlay=await cancelled;await cancelledOverlay.waitForFunction(()=>document.querySelector('#surface').width>300);await cancelledOverlay.keyboard.press('Escape').catch(error=>{if(!cancelledOverlay.isClosed())throw error;});await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('취소'));
     assert.deepEqual(await application.evaluate(({clipboard})=>clipboard.readImage().getSize()),{width:321,height:213});
-    assert.deepEqual(errors,[]);console.log('PASS actual Electron: Ctrl-drag horizontal/vertical zoom and workspace capture, unchanged bitmap/history, real overlay dimensions/preset IPC/persistence and native crop, automatic native clipboard copy and cancellation preservation. Screen pixels substituted.');
+    await page.locator('.capture-pin').first().click();await page.waitForFunction(()=>document.querySelector('.capture-pin').getAttribute('aria-pressed')==='true'&&!document.querySelector('.capture-pin').disabled);
+    assert.equal((await page.evaluate(()=>captureAPI.listPinned())).items.length,1);
+    await page.locator('.capture-pin').first().click();await page.waitForFunction(()=>document.querySelector('.capture-pin').getAttribute('aria-pressed')==='false'&&!document.querySelector('.capture-pin').disabled);
+    assert.equal((await page.evaluate(()=>captureAPI.listPinned())).items.length,0);
+    await page.locator('.capture-pin').first().click();await page.waitForFunction(()=>!document.querySelector('.capture-pin').disabled);await page.click('#rotate');
+    const edited=await page.locator('#editor').evaluate(c=>c.toDataURL());assert.equal((await page.evaluate(()=>captureAPI.listPinned())).items[0].data,edited);
+    await application.close();application=await electron.launch({executablePath:require('electron'),args:[path.resolve(__dirname,'..'),`--user-data-dir=${profile}`],timeout:60000});
+    const restored=await application.firstWindow();await restored.waitForFunction(()=>document.querySelector('#count').textContent==='1'&&!document.querySelector('#rotate').disabled);
+    assert.equal(await restored.locator('#editor').evaluate(c=>c.toDataURL()),edited);assert.equal(await restored.locator('.capture-pin').getAttribute('aria-pressed'),'true');
+    await restored.locator('.capture-delete').click();await restored.waitForFunction(()=>document.querySelector('#count').textContent==='0');assert.equal((await restored.evaluate(()=>captureAPI.listPinned())).items.length,0);
+    await restored.reload();await restored.waitForFunction(()=>document.querySelector('#region')?.onclick);assert.equal((await restored.evaluate(()=>captureAPI.listPinned())).items.length,0);
+    assert.deepEqual(errors,[]);console.log('PASS actual Electron: Ctrl-drag horizontal/vertical zoom and workspace capture, unchanged bitmap/history, real overlay dimensions/preset IPC/persistence and native crop, automatic native clipboard copy, Ctrl-wheel zoom, hidden login startup, native login registration, pinned edit persistence across process restart, unpin and deletion. Screen pixels substituted.');
   } finally {
     if(application)await application.close();
     await fs.rm(profile,{recursive:true,force:true,maxRetries:5,retryDelay:200});

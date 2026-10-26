@@ -4,7 +4,7 @@ const {createStartup,STARTUP_ARG}=require('../src/startup');
 function setup(){let saved={openAtLogin:false};const writes=[];const app={isPackaged:true,getLoginItemSettings:()=>saved,setLoginItemSettings:options=>{writes.push(options);saved={...options};}};return{app,writes,startup:createStartup({app,platform:'win32',executable:'C:\\My Programs\\Capture Program.exe'})};}
 test('startup defaults off, enables hidden login launch at the exact executable path and removes registration',()=>{
   const {startup,writes}=setup();assert.deepEqual(startup.get(),{supported:true,enabled:false});
-  assert.equal(startup.set(true).enabled,true);assert.deepEqual(writes[0],{name:'CaptureProgram',path:'C:\\My Programs\\Capture Program.exe',args:[STARTUP_ARG],openAtLogin:true});
+  assert.equal(startup.set(true).enabled,true);assert.deepEqual(writes[0],{path:'C:\\My Programs\\Capture Program.exe',args:[STARTUP_ARG],openAtLogin:true});
   assert.equal(startup.set(false).enabled,false);assert.equal(writes[1].openAtLogin,false);
   assert.throws(()=>startup.set('true'),/올바르지/);assert.equal(writes.length,2);
 });

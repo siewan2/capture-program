@@ -1,8 +1,7 @@
 const STARTUP_ARG='--startup-hidden';
-const STARTUP_NAME='CaptureProgram';
 function createStartup({app,platform=process.platform,executable=process.execPath}){
   const supported=platform==='win32'&&app.isPackaged;
-  const options={name:STARTUP_NAME,path:executable,args:[STARTUP_ARG]};
+  const options={path:executable,args:[STARTUP_ARG]};
   function get(){
     if(!supported)return{supported:false,enabled:false};
     const state=app.getLoginItemSettings(options);
