@@ -23,15 +23,15 @@ const path = require('node:path');
     await application.evaluate(({BrowserWindow})=>{const main=BrowserWindow.getAllWindows()[0];main.show();main.focus();});
     const errors=[];page.on('pageerror',error=>errors.push(error.message));
     await page.waitForFunction(()=>typeof window.captureAPI?.onPresetsUpdated==='function'&&document.querySelector('#region')?.onclick);
-    await page.click('#settingsTab');assert.equal(await page.locator('#captureShadeEnabled').isChecked(),false);
+    await page.click('#settingsTab');for(const [mode,key] of Object.entries({region:'Control+Shift+C',window:'Control+Shift+W',fixed:'Control+Shift+F',gallery:'Control+Shift+V'}))assert.equal(await page.inputValue('#shortcut-'+mode),key);assert.equal(await page.locator('#captureShadeEnabled').isChecked(),false);
     await page.locator('#captureShadeEnabled').check();await page.reload();await page.waitForFunction(()=>document.querySelector('#region')?.onclick);assert.equal(await page.locator('#captureShadeEnabled').isChecked(),true);await page.click('#captureTab');
     assert.equal(await page.locator('[data-tool=select]').count(),0);assert.equal(await page.locator('[data-tool=highlighter]').getAttribute('class'),'active');
     await application.evaluate(({globalShortcut})=>{
       const register=globalShortcut.register.bind(globalShortcut);globalThis.galleryTestCallbacks={};globalShortcut.register=(key,callback)=>{globalThis.galleryTestCallbacks[key]=callback;return register(key,callback);};
     });
-    await page.click('#settingsTab');await page.locator('#shortcut-gallery').focus();await page.keyboard.press('Control+Shift+4');await page.waitForFunction(()=>document.querySelector('#shortcut-status-gallery').textContent==='등록됨');
-    assert.equal(await application.evaluate(({globalShortcut})=>globalShortcut.isRegistered('Control+Shift+4')),true);
-    await application.evaluate(({BrowserWindow})=>{BrowserWindow.getAllWindows()[0].hide();globalThis.galleryTestCallbacks['Control+Shift+4']();});
+    await page.click('#settingsTab');await page.locator('#shortcut-gallery').focus();await page.keyboard.press('Control+Shift+V');await page.waitForFunction(()=>document.querySelector('#shortcut-status-gallery').textContent==='등록됨');
+    assert.equal(await application.evaluate(({globalShortcut})=>globalShortcut.isRegistered('Control+Shift+V')),true);
+    await application.evaluate(({BrowserWindow})=>{BrowserWindow.getAllWindows()[0].hide();globalThis.galleryTestCallbacks['Control+Shift+V']();});
     await page.waitForFunction(()=>!document.querySelector('#capturePanel').hidden);
     assert.equal(await application.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].isVisible()),true);
     const fixture=await page.evaluate(()=>{const c=document.createElement('canvas');c.width=800;c.height=600;const x=c.getContext('2d');x.fillStyle='#d6e6fa';x.fillRect(0,0,800,600);x.fillStyle='#e34466';x.fillRect(0,0,100,80);const data=c.toDataURL();addCapture(data);return data;});
@@ -39,11 +39,11 @@ const path = require('node:path');
     const original=await page.locator('#editor').evaluate(c=>c.toDataURL());
     await page.locator('#editor').focus();await page.keyboard.press('Escape');
     assert.equal(await application.evaluate(async({BrowserWindow})=>{const main=BrowserWindow.getAllWindows()[0];for(let i=0;i<40&&main.isVisible();i++)await new Promise(resolve=>setTimeout(resolve,50));return main.isVisible();}),false,'Escape must hide the main window');
-    assert.equal(await application.evaluate(({globalShortcut})=>globalShortcut.isRegistered('Control+Shift+4')),true);
-    await application.evaluate(()=>globalThis.galleryTestCallbacks['Control+Shift+4']());await page.waitForFunction(()=>!document.querySelector('#capturePanel').hidden);
+    assert.equal(await application.evaluate(({globalShortcut})=>globalShortcut.isRegistered('Control+Shift+V')),true);
+    await application.evaluate(()=>globalThis.galleryTestCallbacks['Control+Shift+V']());await page.waitForFunction(()=>!document.querySelector('#capturePanel').hidden);
     assert.equal(await application.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].isVisible()),true);
     assert.equal(await page.locator('#editor').evaluate(c=>c.toDataURL()),original);assert.equal(await page.locator('#count').textContent(),'1');
-    for(const [ratio,a,b] of [['1:1',1,1],['3:4',3,4],['4:3',4,3],['9:16',9,16]]){
+    for(const [ratio,a,b] of [['1:1',1,1],['3:4',3,4],['4:3',4,3],['9:16',9,16],['16:9',16,9]]){
       await page.click('#cropImage');await page.selectOption('#cropRatio',ratio);await page.click('#applyCrop');
       const size=await page.locator('#editor').evaluate(c=>({width:c.width,height:c.height}));assert.ok(Math.abs(size.width/size.height-a/b)<.01,ratio+' crop ratio');
       await page.click('#undo');await page.waitForFunction(()=>!document.querySelector('#cropImage').disabled);assert.equal(await page.locator('#editor').evaluate(c=>c.toDataURL()),original);

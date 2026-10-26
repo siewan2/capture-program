@@ -4,7 +4,7 @@ const {fitCropRect,cropPixels}=require('../src/crop-editor');
 const {resizeRect,moveRect}=require('../src/geometry');
 test('crop presets fit inside the image and keep their requested ratio during corner and side resize',()=>{
   const bounds={width:800,height:600};
-  for(const ratio of [[1,1],[3,4],[4,3],[9,16]]){
+  for(const ratio of [[1,1],[3,4],[4,3],[9,16],[16,9]]){
     const rect=fitCropRect(bounds,ratio);assert.ok(Math.abs(rect.width/rect.height-ratio[0]/ratio[1])<1e-9);
     for(const handle of ['nw','n','e','se']){
       const resized=resizeRect(rect,handle,40,25,{shift:true,alt:false},bounds),crop=cropPixels(resized,bounds);

@@ -10,7 +10,7 @@ function cropPixels(rect,bounds){
   return{x,y,width:Math.max(1,Math.min(bounds.width-x,Math.round(rect.width))),height:Math.max(1,Math.min(bounds.height-y,Math.round(rect.height)))};
 }
 function createCropEditor({image,workspace,layer,guide,controls,ratioSelect,dimensions,applyButton,cancelButton,onApply,onActiveChange}){
-  const ratios={'free':null,'1:1':[1,1],'3:4':[3,4],'4:3':[4,3],'9:16':[9,16]};
+  const ratios={'free':null,'1:1':[1,1],'3:4':[3,4],'4:3':[4,3],'9:16':[9,16],'16:9':[16,9]};
   const context=guide.getContext('2d');let active=false,rect=null,drag=null;
   const bounds=()=>({width:image.width,height:image.height});
   const position=()=>{

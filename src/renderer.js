@@ -9,10 +9,14 @@ if(!Array.isArray(presets)||!presets.length||!presets.every(p=>presetSize(p.widt
 function status(message){$('status').textContent=message;}
 let settings;
 try { settings=JSON.parse(localStorage.getItem('settings')); } catch {}
-settings={theme:settings?.theme==='dark'?'dark':'light',magnifier:settings?.magnifier!==false,shade:settings?.shade===true,lastFixedRect:settings?.lastFixedRect,lastFixedSize:presetSize(settings?.lastFixedSize?.width,settings?.lastFixedSize?.height)?settings.lastFixedSize:null,format:settings?.format==='jpeg'?'jpeg':'png',shortcuts:{region:'Control+Shift+1',window:'Control+Shift+2',fixed:'Control+Shift+3',gallery:'Control+Shift+4',...settings?.shortcuts}};
+const defaultShortcuts={region:'Control+Shift+C',window:'Control+Shift+W',fixed:'Control+Shift+F',gallery:'Control+Shift+V'};
+const oldDefaults={region:'Control+Shift+1',window:'Control+Shift+2',fixed:'Control+Shift+3',gallery:'Control+Shift+4'};
+const usesOldDefaults=!!settings?.shortcuts&&Object.entries(oldDefaults).every(([mode,key])=>settings.shortcuts[mode]===key||(mode==='gallery'&&settings.shortcuts[mode]===undefined));
+settings={theme:settings?.theme==='dark'?'dark':'light',magnifier:settings?.magnifier!==false,shade:settings?.shade===true,lastFixedRect:settings?.lastFixedRect,lastFixedSize:presetSize(settings?.lastFixedSize?.width,settings?.lastFixedSize?.height)?settings.lastFixedSize:null,format:settings?.format==='jpeg'?'jpeg':'png',shortcuts:{...defaultShortcuts,...(usesOldDefaults?{}:settings?.shortcuts)}};
 document.documentElement.dataset.theme=settings.theme;$('theme').value=settings.theme;
 $('theme').onchange=()=>{settings.theme=$('theme').value;document.documentElement.dataset.theme=settings.theme;persistSettings();$('settingsStatus').textContent='화면 스타일을 저장했습니다.';};
 function persistSettings(){localStorage.setItem('settings',JSON.stringify(settings));}
+if(usesOldDefaults)persistSettings();
 function cancelCrop(){cropEditor?.cancel();}
 function showTab(name){
   cancelCrop();
