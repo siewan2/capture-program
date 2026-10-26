@@ -27,7 +27,7 @@ function paint(){
 function magnify(p){
   const box=document.getElementById('magnifier');
   if(!config.magnifier||config.mode!=='region'){box.hidden=true;return;}
-  const x=Math.max(0,Math.min(image.width-1,Math.floor(p.x*image.width/config.bounds.width))),y=Math.max(0,Math.min(image.height-1,Math.floor(p.y*image.height/config.bounds.height)));
+  const x=Math.max(0,Math.min(image.naturalWidth-1,Math.floor(p.x*image.naturalWidth/config.bounds.width))),y=Math.max(0,Math.min(image.naturalHeight-1,Math.floor(p.y*image.naturalHeight/config.bounds.height)));
   const zoom=document.getElementById('zoom').getContext('2d');zoom.imageSmoothingEnabled=false;zoom.fillStyle='#333';zoom.fillRect(0,0,160,160);
   zoom.drawImage(image,x-40,y-40,80,80,0,0,160,160);zoom.strokeStyle='#ff3030';zoom.lineWidth=1;zoom.beginPath();zoom.moveTo(0,81.5);zoom.lineTo(160,81.5);zoom.moveTo(81.5,0);zoom.lineTo(81.5,160);zoom.stroke();zoom.strokeStyle='white';zoom.strokeRect(80.5,80.5,1,1);
   box.hidden=false;box.style.left=Math.max(0,Math.min(config.bounds.width-164,p.x+24+164>config.bounds.width?p.x-188:p.x+24))+'px';box.style.top=Math.max(0,Math.min(config.bounds.height-188,p.y+24+188>config.bounds.height?p.y-212:p.y+24))+'px';
