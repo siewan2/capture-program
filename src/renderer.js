@@ -1,7 +1,7 @@
 const $ = id => document.getElementById(id);
 const canvas=$('editor'), ctx=canvas.getContext('2d');
 let originalCanvas=null,imageRevision=0,loadingImage=false,zoomDrag=null,controlDown=false;
-let captures=[], current=null, tool='select', drawing=null, freeform=null, busy=false;
+let captures=[], current=null, tool='highlighter', drawing=null, freeform=null, busy=false;
 let presets;
 try {presets=JSON.parse(localStorage.getItem('presets'));} catch {}
 if(!Array.isArray(presets)||!presets.length||!presets.every(p=>presetSize(p.width,p.height))) presets=[{width:640,height:480},{width:1280,height:720},{width:1920,height:1080}];
@@ -155,10 +155,28 @@ const toolOptions={
   pen:{color:'#ff524f',width:3},eraser:{color:'#ffffff',width:30},highlighter:{color:'#ffeb3b',width:28,opacity:0.35},
   rect:{color:'#ff524f',width:3,fillMode:'none',fillColor:'#99ccff'},ellipse:{color:'#ff524f',width:3,fillMode:'none',fillColor:'#99ccff'},freeform:{color:'#ff524f',width:3,fillMode:'none',fillColor:'#99ccff',closed:true},text:{color:'#000000',size:32,bold:false,italic:false,underline:false}
 };
+try{
+  const saved=JSON.parse(localStorage.getItem('toolOptions'));
+  for(const [name,options] of Object.entries(toolOptions)){
+    const stored=saved?.[name];if(!stored||typeof stored!=='object')continue;
+    for(const [key,value] of Object.entries(options)){
+      const next=stored[key];
+      if(typeof next!==typeof value)continue;
+      if(typeof value==='boolean')options[key]=next;
+      else if(typeof value==='number'){
+        const [min,max]=key==='opacity'?[.1,.8]:key==='size'?[8,240]:[1,100];
+        if(Number.isFinite(next)&&next>=min&&next<=max)options[key]=next;
+      }else if((key==='color'||key==='fillColor')&&/^#[0-9a-f]{6}$/i.test(next))options[key]=next;
+      else if(key==='fillMode'&&['none','fill','both'].includes(next))options[key]=next;
+    }
+  }
+}catch{}
+function persistToolOptions(){try{localStorage.setItem('toolOptions',JSON.stringify(toolOptions));}catch(error){status('도구 설정 저장 실패: '+error.message);}}
 let textDraft=null;
 const swatches=[['검정','#000000'],['노랑','#ffeb3b'],['초록','#64e572'],['하늘','#43d9ff'],['분홍','#ff77b7'],['주황','#ffad42'],['보라','#b18aff'],['빨강','#ff524f']];
 for(const [name,color] of swatches){const button=document.createElement('button');button.title=name;button.setAttribute('aria-label',name);button.dataset.color=color;button.style.backgroundColor=color;button.onmousedown=event=>{if(textDraft)event.preventDefault();};button.onclick=()=>{$('color').value=color;changeOptions();if(textDraft)$('inlineText').focus({preventScroll:true});};$('colorSwatches').append(button);}
 function syncOptions(){
+  canvas.style.cursor=tool==='text'?'text':'crosshair';
   const options=toolOptions[tool]||toolOptions.pen;
   const shape=['rect','ellipse','freeform'].includes(tool);
   $('fillOption').hidden=!shape||(tool==='freeform'&&!options.closed);$('fillColorOption').hidden=!shape||options.fillMode==='none'||(tool==='freeform'&&!options.closed);$('freeformOption').hidden=tool!=='freeform';
@@ -185,6 +203,7 @@ function changeOptions(){
   if(freeform){freeform.options={...toolOptions.freeform};paintFreeform();}
   syncTextColor();
   if(textDraft)previewText();
+  persistToolOptions();
 }
 for(const id of ['color','weight','textSize','opacity','fillMode','freeformKind'])$(id).oninput=changeOptions;
 function syncFillColor(){
@@ -192,7 +211,7 @@ function syncFillColor(){
   document.querySelectorAll('#fillPalette button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.color===color)));
 }
 const fillColors=[['검정','#000000'],['흰색','#ffffff'],['회색','#666666'],['빨강','#ff3030'],['주황','#ff9800'],['노랑','#ffeb3b'],['초록','#159447'],['파랑','#0088ff'],['하늘','#99ccff'],['보라','#8e44ad'],['분홍','#ed4b91']];
-for(const [name,color] of fillColors){const button=document.createElement('button');button.type='button';button.dataset.color=color;button.style.backgroundColor=color;button.setAttribute('aria-label','채우기 '+name);button.onclick=()=>{if(!toolOptions[tool]?.fillColor)return;toolOptions[tool].fillColor=color;syncFillColor();$('fillPalette').hidden=true;$('fillColor').setAttribute('aria-expanded','false');if(freeform){freeform.options={...toolOptions.freeform};paintFreeform();}};$('fillPalette').append(button);}
+for(const [name,color] of fillColors){const button=document.createElement('button');button.type='button';button.dataset.color=color;button.style.backgroundColor=color;button.setAttribute('aria-label','채우기 '+name);button.onclick=()=>{if(!toolOptions[tool]?.fillColor)return;toolOptions[tool].fillColor=color;persistToolOptions();syncFillColor();$('fillPalette').hidden=true;$('fillColor').setAttribute('aria-expanded','false');if(freeform){freeform.options={...toolOptions.freeform};paintFreeform();}};$('fillPalette').append(button);}
 $('fillColor').onclick=()=>{$('fillPalette').hidden=!$('fillPalette').hidden;$('fillColor').setAttribute('aria-expanded',String(!$('fillPalette').hidden));};
 document.querySelectorAll('[data-tool]').forEach(b=>b.onclick=()=>{finishText(true);finishFreeform(true);$('fillPalette').hidden=true;tool=b.dataset.tool;document.querySelectorAll('[data-tool]').forEach(x=>x.classList.toggle('active',x===b));canvas.style.cursor=tool==='text'?'text':tool==='select'?'default':'crosshair';syncOptions();});
 function positionTextInput(){
@@ -234,7 +253,7 @@ $('textColor').onmousedown=event=>event.preventDefault();
 $('textColor').onclick=()=>{$('textPalette').hidden=!$('textPalette').hidden;$('textColor').setAttribute('aria-expanded',String(!$('textPalette').hidden));positionTextInput();};
 for(const [id,key] of [['textBold','bold'],['textItalic','italic'],['textUnderline','underline']]){
   $(id).onmousedown=event=>event.preventDefault();
-  $(id).onclick=()=>{toolOptions.text[key]=!toolOptions.text[key];$(id).setAttribute('aria-pressed',String(toolOptions.text[key]));previewText();$('inlineText').focus();};
+  $(id).onclick=()=>{toolOptions.text[key]=!toolOptions.text[key];persistToolOptions();$(id).setAttribute('aria-pressed',String(toolOptions.text[key]));previewText();$('inlineText').focus();};
 }
 $('inlineText').onpointerdown=event=>{if(event.button===0&&textDraft){event.preventDefault();finishText(true);finishFreeform(true);}};
 
