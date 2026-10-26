@@ -17,9 +17,20 @@ function showTab(name){
   $('capturePanel').hidden=name!=='capture';$('settingsPanel').hidden=name!=='settings';
   for(const tab of ['capture','settings']){ $(tab+'Tab').classList.toggle('active',name===tab);$(tab+'Tab').setAttribute('aria-selected',String(name===tab)); }
 }
+async function refreshStartup(){
+  try{const state=await window.captureAPI.getStartup();$('startupEnabled').checked=state.enabled;$('startupEnabled').disabled=!state.supported;$('startupStatus').textContent=state.supported?'':'Windows 배포 버전에서 설정할 수 있습니다.';}
+  catch(error){$('startupStatus').textContent='자동 실행 설정 확인 실패: '+error.message;}
+}
+$('startupEnabled').onchange=async()=>{
+  const enabled=$('startupEnabled').checked;$('startupEnabled').disabled=true;
+  try{const state=await window.captureAPI.setStartup(enabled);$('startupEnabled').checked=state.enabled;$('startupStatus').textContent=state.enabled?'Windows 시작 시 백그라운드에서 실행합니다.':'Windows 자동 실행을 해제했습니다.';}
+  catch(error){$('startupEnabled').checked=!enabled;$('startupStatus').textContent=error.message;}
+  finally{$('startupEnabled').disabled=false;}
+};
+refreshStartup();
 $('magnifierEnabled').checked=settings.magnifier;
 $('magnifierEnabled').onchange=()=>{settings.magnifier=$('magnifierEnabled').checked;persistSettings();$('settingsStatus').textContent='돋보기 설정을 저장했습니다.';};
-$('captureTab').onclick=()=>showTab('capture');$('settingsTab').onclick=()=>showTab('settings');
+$('captureTab').onclick=()=>showTab('capture');$('settingsTab').onclick=()=>{showTab('settings');refreshStartup();};
 function updateFormat(){ $('imageFormat').value=settings.format; }
 updateFormat();$('imageFormat').onchange=()=>{settings.format=$('imageFormat').value;persistSettings();updateFormat();$('settingsStatus').textContent='저장 형식을 저장했습니다.';};
 let shortcutRevision=0;

@@ -7,8 +7,18 @@ const path = require('node:path');
   const profile = await fs.mkdtemp(path.join(os.tmpdir(), 'capture-desktop-'));
   let application;
   try {
-    application = await electron.launch({executablePath:require('electron'),args:[path.resolve(__dirname,'..'),`--user-data-dir=${profile}`],timeout:60000});
+    application = await electron.launch({executablePath:require('electron'),args:[path.resolve(__dirname,'..'),'--startup-hidden',`--user-data-dir=${profile}`],timeout:60000});
+    if(process.platform==='win32')await application.evaluate(({app})=>{
+      const options={name:'CaptureProgram',path:process.execPath,args:['--startup-hidden']};
+      try{
+        app.setLoginItemSettings({...options,openAtLogin:true});
+        if(!app.getLoginItemSettings(options).openAtLogin)throw new Error('Windows startup registration failed');
+      }finally{app.setLoginItemSettings({...options,openAtLogin:false});}
+      if(app.getLoginItemSettings(options).openAtLogin)throw new Error('Windows startup removal failed');
+    });
     const page = await application.firstWindow();page.setDefaultTimeout(20000);
+    assert.equal(await application.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].isVisible()),false,'Login startup must keep the main window hidden');
+    await application.evaluate(({BrowserWindow})=>{const main=BrowserWindow.getAllWindows()[0];main.show();main.focus();});
     const errors=[];page.on('pageerror',error=>errors.push(error.message));
     await page.waitForFunction(()=>typeof window.captureAPI?.onPresetsUpdated==='function'&&document.querySelector('#region')?.onclick);
     const fixture=await page.evaluate(()=>{const c=document.createElement('canvas');c.width=800;c.height=600;const x=c.getContext('2d');x.fillStyle='#d6e6fa';x.fillRect(0,0,800,600);const data=c.toDataURL();addCapture(data);return data;});
