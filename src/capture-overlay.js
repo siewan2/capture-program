@@ -89,4 +89,4 @@ function installOverlayCapture(main){
     }catch(error){session.finish(null);throw error;}
   };
 }
-module.exports={installOverlayCapture};
+module.exports={installOverlayCapture,isOverlayActive:()=>active!==null};

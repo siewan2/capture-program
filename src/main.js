@@ -1,7 +1,7 @@
 const { app, BrowserWindow, ipcMain, dialog, screen, globalShortcut, clipboard, nativeImage, Tray, Menu } = require('electron');
 const path = require('node:path');
 const {installBackground}=require('./background');
-const {installOverlayCapture}=require('./capture-overlay');
+const {installOverlayCapture,isOverlayActive}=require('./capture-overlay');
 const {createSaveDialogs}=require('./save-dialogs');
 const {createPinnedStore}=require('./pinned-store');
 const {createStartup,STARTUP_ARG}=require('./startup');
@@ -35,7 +35,7 @@ app.whenReady().then(async () => {
   main.loadFile(path.join(__dirname,'index.html'));
   ipcMain.handle('shortcuts', (_, shortcuts) => applyShortcuts(globalShortcut, shortcuts, mode => {
     if(mode==='gallery'){
-      if(BrowserWindow.getAllWindows().some(window=>window!==main&&!window.isDestroyed()))return;
+      if(isOverlayActive()||BrowserWindow.getAllWindows().some(window=>window!==main&&!window.isDestroyed()))return;
       if(main.isMinimized())main.restore();main.show();main.focus();
     }
     main.webContents.send('capture-shortcut', mode);
