@@ -105,7 +105,11 @@ const path = require('node:path');
     assert.deepEqual(await application.evaluate(({clipboard})=>clipboard.readImage().getSize()),{width:321,height:213});
     assert.equal(await application.evaluate(({clipboard,nativeImage},data)=>clipboard.readImage().toBitmap().equals(nativeImage.createFromDataURL(data).toBitmap()),await page.locator('#editor').evaluate(c=>c.toDataURL())),true);
     assert.deepEqual(await page.locator('#editor').evaluate(c=>Array.from(c.getContext('2d').getImageData(1,5,1,1).data)),[0,0,0,255]);
-    assert.notDeepEqual(await page.locator('#editor').evaluate(c=>Array.from(c.getContext('2d').getImageData(2,5,1,1).data)),[0,0,0,255]);
+    assert.equal(await page.evaluate(async()=>{
+      const source=await loadImage(current.originalData),raw=document.createElement('canvas');raw.width=source.width;raw.height=source.height;raw.getContext('2d').drawImage(source,0,0);
+      const expected=raw.getContext('2d').getImageData(0,0,raw.width,raw.height).data,actual=ctx.getImageData(0,0,canvas.width,canvas.height).data;
+      for(let y=0;y<raw.height;y++)for(let x=0;x<raw.width;x++)for(let c=0;c<4;c++){const i=(y*raw.width+x)*4+c,edge=x<2||y<2||x>=raw.width-2||y>=raw.height-2;if(actual[i]!== (edge?(c===3?255:0):expected[i]))return JSON.stringify({x,y,c,actual:actual[i],expected:edge?(c===3?255:0):expected[i]});}return null;
+    }),null,'Frame is exactly 2px; interior equals captured original even on black screens');
     await page.click('#settingsTab');await page.locator('#autoBorderEnabled').uncheck();await page.click('#captureTab');
     await page.selectOption('#presets','0');
     const repeated=application.waitForEvent('window');await page.click('#fixed');const repeatedOverlay=await repeated;await repeatedOverlay.waitForFunction(()=>document.querySelector('#captureWidth').value==='321'&&document.querySelector('#captureHeight').value==='213');
