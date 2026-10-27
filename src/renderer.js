@@ -12,7 +12,7 @@ try { settings=JSON.parse(localStorage.getItem('settings')); } catch {}
 const defaultShortcuts={region:'Control+Shift+C',window:'Control+Shift+W',fixed:'Control+Shift+F',gallery:'Control+Shift+V'};
 const oldDefaults={region:'Control+Shift+1',window:'Control+Shift+2',fixed:'Control+Shift+3',gallery:'Control+Shift+4'};
 const usesOldDefaults=!!settings?.shortcuts&&Object.entries(oldDefaults).every(([mode,key])=>settings.shortcuts[mode]===key||(mode==='gallery'&&settings.shortcuts[mode]===undefined));
-settings={theme:settings?.theme==='dark'?'dark':'light',magnifier:settings?.magnifier!==false,shade:settings?.shade===true,lastFixedRect:settings?.lastFixedRect,lastFixedSize:presetSize(settings?.lastFixedSize?.width,settings?.lastFixedSize?.height)?settings.lastFixedSize:null,format:settings?.format==='jpeg'?'jpeg':'png',shortcuts:{...defaultShortcuts,...(usesOldDefaults?{}:settings?.shortcuts)}};
+settings={theme:settings?.theme==='dark'?'dark':'light',magnifier:settings?.magnifier!==false,shade:settings?.shade===true,autoBorder:settings?.autoBorder!==false,lastFixedRect:settings?.lastFixedRect,lastFixedSize:presetSize(settings?.lastFixedSize?.width,settings?.lastFixedSize?.height)?settings.lastFixedSize:null,format:settings?.format==='jpeg'?'jpeg':'png',shortcuts:{...defaultShortcuts,...(usesOldDefaults?{}:settings?.shortcuts)}};
 document.documentElement.dataset.theme=settings.theme;$('theme').value=settings.theme;
 $('theme').onchange=()=>{settings.theme=$('theme').value;document.documentElement.dataset.theme=settings.theme;persistSettings();$('settingsStatus').textContent='화면 스타일을 저장했습니다.';};
 function persistSettings(){localStorage.setItem('settings',JSON.stringify(settings));}
@@ -35,6 +35,8 @@ $('startupEnabled').onchange=async()=>{
   finally{$('startupEnabled').disabled=false;}
 };
 refreshStartup();
+$('autoBorderEnabled').checked=settings.autoBorder;
+$('autoBorderEnabled').onchange=()=>{settings.autoBorder=$('autoBorderEnabled').checked;persistSettings();$('settingsStatus').textContent='자동 테두리 설정을 저장했습니다. 다음 캡처부터 적용됩니다.';};
 $('captureShadeEnabled').checked=settings.shade;
 $('captureShadeEnabled').onchange=()=>{settings.shade=$('captureShadeEnabled').checked;persistSettings();$('settingsStatus').textContent='캡처 화면 음영 설정을 저장했습니다.';};
 $('magnifierEnabled').checked=settings.magnifier;
@@ -92,7 +94,7 @@ function renderGallery(){
     const remove=document.createElement('button');remove.className='capture-icon capture-delete';remove.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>';remove.title='이미지 삭제';remove.setAttribute('aria-label','이미지 삭제');remove.disabled=saving||!!item.pinPending;remove.onclick=()=>deleteItem(item);
     card.append(select,pin,remove);return card;
   }));
-  for(const id of ['cropImage','rotateLeft','rotate','undo','reset'])$(id).disabled=!current || loadingImage || (cropEditor?.active&&!['cropImage','undo'].includes(id)) || (id==='cropImage'&&saving) || (id==='undo'&&!current.history.length&&!textDraft&&!freeform);
+  for(const id of ['cropImage','rotateLeft','rotate','grayscale','undo','reset'])$(id).disabled=!current || loadingImage || (cropEditor?.active&&!['cropImage','undo'].includes(id)) || (id==='cropImage'&&saving) || (id==='undo'&&!current.history.length&&!textDraft&&!freeform);
   $('saveAll').disabled=!captures.length||saving;
   $('finishFreeform').disabled=!freeform;$('cancelFreeform').disabled=!freeform;
 
@@ -144,7 +146,7 @@ window.addEventListener('keydown',event=>{if(event.key==='Control')controlDown=t
 window.addEventListener('blur',()=>{controlDown=false;endZoom();});
 function checkpoint(){current.history.push({data:current.data,baseData:current.baseData});if(current.history.length>20)current.history.shift();}
 function commit(){applyViewScale();current.data=canvas.toDataURL('image/png');current.width=canvas.width;current.height=canvas.height;persistPinned(current);renderGallery();}
-async function addCapture(data){const item={id:crypto.randomUUID(),data,originalData:data,baseData:data,name:`캡처 ${new Date().toLocaleTimeString('ko-KR')}`,history:[]};captures.unshift(item);await openItem(item);return item;}
+async function addCapture(data){const originalData=data;if(settings.autoBorder){const image=await loadImage(data),framed=document.createElement('canvas');framed.width=image.width;framed.height=image.height;const context=framed.getContext('2d');context.drawImage(image,0,0);addBlackBorder(context,framed.width,framed.height);data=framed.toDataURL();}const item={id:crypto.randomUUID(),data,originalData,baseData:originalData,name:`캡처 ${new Date().toLocaleTimeString('ko-KR')}`,history:[]};captures.unshift(item);await openItem(item);return item;}
 function point(event,target){const r=target.getBoundingClientRect();return{x:Math.max(0,Math.min(target.width,(event.clientX-r.left)*target.width/r.width)),y:Math.max(0,Math.min(target.height,(event.clientY-r.top)*target.height/r.height))};}
 async function begin(mode){
   if(busy||saving||document.querySelector('dialog[open]'))return;
@@ -155,14 +157,14 @@ async function begin(mode){
     if(data){
       showTab('capture');const item=await addCapture(data);
       if(mode==='fixed'&&presetSize(item.width,item.height)){settings.lastFixedSize={width:item.width,height:item.height};persistSettings();}
-      try{await window.captureAPI.copyImage(data);status('캡처 이미지를 클립보드에 복사했습니다.');}
+      try{await window.captureAPI.copyImage(item.data);status('캡처 이미지를 클립보드에 복사했습니다.');}
       catch(error){status(`캡처 완료 · 클립보드 복사 실패: ${error.message}`);}
     }else status('캡처를 취소했습니다.');
   }catch(error){status(`캡처 실패: ${error.message}`);}finally{busy=false;}
 }
 $('region').onclick=()=>begin('region');$('window').onclick=()=>begin('window');$('fixed').onclick=()=>begin('fixed');
 const toolOptions={
-  pen:{color:'#ff524f',width:3},eraser:{color:'#ffffff',width:30},mosaic:{color:'#ffffff',width:40,strength:'medium'},highlighter:{color:'#ffeb3b',width:28,opacity:0.35},
+  pen:{color:'#ff524f',width:3},arrow:{color:'#ff524f',width:3},eraser:{color:'#ffffff',width:30},mosaic:{color:'#ffffff',width:40,strength:'medium'},highlighter:{color:'#ffeb3b',width:28,opacity:0.35},
   rect:{color:'#ff524f',width:3,fillMode:'none',fillColor:'#99ccff'},ellipse:{color:'#ff524f',width:3,fillMode:'none',fillColor:'#99ccff'},freeform:{color:'#ff524f',width:3,fillMode:'none',fillColor:'#99ccff',closed:true},text:{color:'#000000',size:32,bold:false,italic:false,underline:false}
 };
 try{
@@ -329,7 +331,8 @@ canvas.onpointermove=e=>{
   else if(drawing.tool==='mosaic'){drawing.points.push(p);mosaicStroke(drawing);}
   else if(drawing.tool==='pen'||drawing.tool==='highlighter'){
     drawing.points.push(p);drawStroke(ctx,drawing.points,{...options,highlight:drawing.tool==='highlighter'});
-  }else{
+  }else if(drawing.tool==='arrow'){drawArrow(ctx,drawing.start,p,options);}
+  else{
     const r=selection(drawing.start,p,canvas.width,canvas.height);drawShape(ctx,drawing.tool,r,options);
   }
 };
@@ -373,6 +376,11 @@ function rotateImage(direction){
   canvas.width=rotated.width;canvas.height=rotated.height;ctx.drawImage(rotated,0,0);commit();
 };
 $('rotate').onclick=()=>rotateImage(1);$('rotateLeft').onclick=()=>rotateImage(-1);
+$('grayscale').onclick=()=>{
+  cancelCrop();finishDrawing();finishText(true);finishFreeform(true);if(!current||loadingImage)return;checkpoint();
+  for(const target of [canvas,originalCanvas]){const context=target.getContext('2d'),pixels=context.getImageData(0,0,target.width,target.height);grayscalePixels(pixels.data);context.putImageData(pixels,0,0);}
+  current.baseData=originalCanvas.toDataURL();commit();status('이미지를 그레이스케일로 변환했습니다.');
+};
 $('reset').onclick=()=>{cancelCrop();finishText(false);finishFreeform(false);if(!current)return;checkpoint();current.data=current.originalData;current.baseData=current.originalData;current.viewZoom=1;persistPinned(current);openItem(current);};
 function pinnedSnapshot(item){return{id:item.id,name:item.name,data:item.data,originalData:item.originalData,baseData:item.baseData};}
 function persistPinned(item){if(item.pinned)window.captureAPI.putPinned(pinnedSnapshot(item)).catch(error=>status('고정 이미지 저장 실패: '+error.message));}

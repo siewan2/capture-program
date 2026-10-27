@@ -24,7 +24,7 @@ function drawText(context,text,point,options){
   });
   context.restore();
 }
-if(typeof module!=='undefined')module.exports={drawStroke,drawText,textFont,drawShape,drawFreeform,restorePixels};
+if(typeof module!=='undefined')module.exports={drawStroke,drawText,textFont,drawShape,drawFreeform,restorePixels,drawArrow,arrowGeometry};
 
 function fillStroke(context,options,closed=true){
   if(closed&&options.fillMode&&options.fillMode!=='none'){context.fillStyle=options.fillColor;context.fill();}
@@ -53,4 +53,17 @@ function restorePixels(target,original,mask){
     target[i+3]=alpha*255;
   }
   return target;
+}
+
+function arrowGeometry(start,end,width){
+  const dx=end.x-start.x,dy=end.y-start.y,length=Math.hypot(dx,dy);if(length<1)return null;
+  const ux=dx/length,uy=dy/length,head=Math.min(length*.45,Math.max(12,width*4));
+  const base={x:end.x-ux*head,y:end.y-uy*head};
+  return{base,left:{x:base.x-uy*head*.5,y:base.y+ux*head*.5},right:{x:base.x+uy*head*.5,y:base.y-ux*head*.5}};
+}
+function drawArrow(context,start,end,options){
+  const shape=arrowGeometry(start,end,options.width);if(!shape)return;
+  context.save();context.strokeStyle=options.color;context.fillStyle=options.color;context.lineWidth=options.width;context.lineCap='round';context.lineJoin='round';
+  context.beginPath();context.moveTo(start.x,start.y);context.lineTo(shape.base.x,shape.base.y);context.stroke();
+  context.beginPath();context.moveTo(end.x,end.y);context.lineTo(shape.left.x,shape.left.y);context.lineTo(shape.right.x,shape.right.y);context.closePath();context.fill();context.restore();
 }
