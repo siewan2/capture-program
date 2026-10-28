@@ -2,7 +2,7 @@ const $ = id => document.getElementById(id);
 const canvas=$('editor'), ctx=canvas.getContext('2d');
 let cropEditor=null;
 let originalCanvas=null,imageRevision=0,loadingImage=false,zoomDrag=null,controlDown=false;
-let captures=[], current=null, tool='highlighter', drawing=null, freeform=null, busy=false;
+let captures=[], current=null, tool='highlighter', drawing=null, freeform=null, busy=false, pasting=false;
 let presets;
 try {presets=JSON.parse(localStorage.getItem('presets'));} catch {}
 if(!Array.isArray(presets)||!presets.length||!presets.every(p=>presetSize(p.width,p.height))) presets=[{width:640,height:480},{width:1280,height:720},{width:1920,height:1080}];
@@ -86,8 +86,18 @@ $('removePreset').onclick=()=>{if(presets.length===1){$('presetStatus').textCont
 function loadImage(data){return new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>resolve(img);img.onerror=reject;img.src=data;});}
 function renderGallery(){
   $('count').textContent=captures.length;
-  $('gallery').replaceChildren(...captures.map(item=>{
-    const card=document.createElement('div');card.className='capture'+(current===item?' selected':'');
+  const gallery=$('gallery'),scroller=gallery.closest('aside'),scrollTop=scroller.scrollTop;
+  const existing=new Map([...gallery.children].map(card=>[card.dataset.id,card]));
+  const cards=captures.map(item=>{
+    const reused=existing.get(item.id);
+    if(reused){
+      reused.classList.toggle('selected',current===item);
+      const img=reused.querySelector('img');if(img.getAttribute('src')!==item.data)img.src=item.data;img.alt=item.name;
+      const pin=reused.querySelector('.capture-pin');pin.title=item.pinned?'고정 해제':'고정 · 재실행 후에도 유지';pin.setAttribute('aria-label',pin.title);pin.setAttribute('aria-pressed',String(!!item.pinned));pin.disabled=!!item.pinPending;
+      reused.querySelector('.capture-delete').disabled=saving||!!item.pinPending;
+      return reused;
+    }
+    const card=document.createElement('div');card.dataset.id=item.id;card.className='capture'+(current===item?' selected':'');
     const select=document.createElement('button');select.className='capture-select';
     const img=document.createElement('img');img.src=item.data;img.alt=item.name;
     select.title=`${item.name} · 우클릭: 저장 / 삭제`;select.append(img);select.onclick=()=>openItem(item);
@@ -95,7 +105,10 @@ function renderGallery(){
     const pin=document.createElement('button');pin.className='capture-icon capture-pin';pin.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 3 8 0-1 6 4 4v2h-6v6l-1 2-1-2v-6H5v-2l4-4z"/></svg>';pin.title=item.pinned?'고정 해제':'고정 · 재실행 후에도 유지';pin.setAttribute('aria-label',pin.title);pin.setAttribute('aria-pressed',String(!!item.pinned));pin.disabled=!!item.pinPending;pin.onclick=()=>togglePin(item);
     const remove=document.createElement('button');remove.className='capture-icon capture-delete';remove.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>';remove.title='이미지 삭제';remove.setAttribute('aria-label','이미지 삭제');remove.disabled=saving||!!item.pinPending;remove.onclick=()=>deleteItem(item);
     card.append(select,pin,remove);return card;
-  }));
+  });
+  const wanted=new Set(cards);for(const card of [...gallery.children])if(!wanted.has(card))card.remove();
+  cards.forEach((card,index)=>{if(gallery.children[index]!==card)gallery.insertBefore(card,gallery.children[index]||null);});
+  scroller.scrollTop=scrollTop;
   for(const id of ['cropImage','rotateLeft','rotate','grayscale','undo','reset'])$(id).disabled=!current || loadingImage || (cropEditor?.active&&!['cropImage','undo'].includes(id)) || (id==='cropImage'&&saving) || (id==='undo'&&!current.history.length&&!textDraft&&!freeform);
   $('saveAll').disabled=!captures.length||saving;
   $('finishFreeform').disabled=!freeform;$('cancelFreeform').disabled=!freeform;
@@ -148,7 +161,7 @@ window.addEventListener('keydown',event=>{if(event.key==='Control')controlDown=t
 window.addEventListener('blur',()=>{controlDown=false;endZoom();});
 function checkpoint(){current.history.push({data:current.data,baseData:current.baseData});if(current.history.length>20)current.history.shift();}
 function commit(){applyViewScale();current.data=canvas.toDataURL('image/png');current.width=canvas.width;current.height=canvas.height;persistPinned(current);renderGallery();}
-async function addCapture(data){const originalData=data;if(settings.autoBorder){const image=await loadImage(data),framed=document.createElement('canvas');framed.width=image.width;framed.height=image.height;const context=framed.getContext('2d');context.drawImage(image,0,0);addBlackBorder(context,framed.width,framed.height,settings.borderWidth);data=framed.toDataURL();}const item={id:crypto.randomUUID(),data,originalData,baseData:originalData,name:`캡처 ${new Date().toLocaleTimeString('ko-KR')}`,history:[]};captures.unshift(item);await openItem(item);return item;}
+async function addCapture(data,{before=null,applyBorder=true}={}){const originalData=data;if(applyBorder&&settings.autoBorder){const image=await loadImage(data),framed=document.createElement('canvas');framed.width=image.width;framed.height=image.height;const context=framed.getContext('2d');context.drawImage(image,0,0);addBlackBorder(context,framed.width,framed.height,settings.borderWidth);data=framed.toDataURL();}const item={id:crypto.randomUUID(),data,originalData,baseData:originalData,name:`캡처 ${new Date().toLocaleTimeString('ko-KR')}`,history:[]};const index=before?captures.indexOf(before):-1;if(index<0)captures.unshift(item);else captures.splice(index,0,item);await openItem(item);return item;}
 function point(event,target){const r=target.getBoundingClientRect();return{x:Math.max(0,Math.min(target.width,(event.clientX-r.left)*target.width/r.width)),y:Math.max(0,Math.min(target.height,(event.clientY-r.top)*target.height/r.height))};}
 async function begin(mode){
   if(busy||saving||document.querySelector('dialog[open]'))return;
@@ -370,7 +383,9 @@ cropEditor=createCropEditor({image:canvas,workspace:$('workspace'),layer:$('crop
   canvas.width=rect.width;canvas.height=rect.height;ctx.drawImage(edited,0,0);current.viewZoom=1;commit();status(`이미지를 ${rect.width} × ${rect.height} px로 잘랐습니다.`);
 }});
 $('cropImage').onclick=()=>{if(cropEditor.active){cancelCrop();return;}if(!current||loadingImage||saving)return;finishDrawing();finishText(true);finishFreeform(true);endZoom();cropEditor.start();};
-$('undo').onclick=()=>{if(cropEditor.active){cancelCrop();return;}if(freeform){finishFreeform(false);return;}if(textDraft){finishText(false);return;}if(!current?.history.length)return;const previous=current.history.pop();current.data=previous.data;current.baseData=previous.baseData;persistPinned(current);openItem(current);};
+async function undoEdit(){
+  if(loadingImage||drawing||saving||busy||pasting)return;if(cropEditor.active){cancelCrop();return;}if(freeform){finishFreeform(false);return;}if(textDraft){finishText(false);return;}if(!current?.history.length)return;const previous=current.history.pop();current.data=previous.data;current.baseData=previous.baseData;persistPinned(current);await openItem(current);}
+$('undo').onclick=undoEdit;
 function rotateImage(direction){
   cancelCrop();
   finishText(true);finishFreeform(true);if(!current)return;checkpoint();
@@ -435,6 +450,29 @@ async function saveItems(items,all=false){
 $('saveAll').onclick=()=>saveItems(captures,true);
 renderGallery();
 restorePinned();
+
+function editingText(target){return !!target.closest('input,textarea,select,[contenteditable]:not([contenteditable="false"]),[role="textbox"]');}
+document.addEventListener('keydown',event=>{
+  if(!(event.ctrlKey||event.metaKey)||event.altKey||event.shiftKey||event.isComposing||event.key.toLowerCase()!=='z')return;
+  if(editingText(event.target)||$('capturePanel').hidden||document.querySelector('dialog[open]')||!current)return;
+  event.preventDefault();if(!event.repeat)undoEdit();
+});
+document.addEventListener('keydown',async event=>{
+  if(!(event.ctrlKey||event.metaKey)||event.altKey||event.shiftKey||event.isComposing||event.key.toLowerCase()!=='v')return;
+  if(editingText(event.target)||$('capturePanel').hidden||document.querySelector('dialog[open]')||!current)return;
+  event.preventDefault();
+  if(event.repeat||busy||saving||loadingImage||drawing||pasting)return;
+  const anchor=current;pasting=true;
+  try{
+    const data=await window.captureAPI.readClipboardImage();
+    if(!data){status('클립보드에 이미지가 없습니다.');return;}
+    if(!captures.includes(anchor))return;
+    const item=await addCapture(data,{before:anchor,applyBorder:false});
+    $('gallery').querySelector(`[data-id="${item.id}"] .capture-select`)?.focus({preventScroll:true});
+    status('클립보드 이미지를 선택한 캡처 위에 추가했습니다.');
+  }catch(error){status('이미지 붙여넣기 실패: '+error.message);}
+  finally{pasting=false;}
+});
 
 document.addEventListener('keydown',event=>{
   if(!(event.ctrlKey||event.metaKey)||event.key.toLowerCase()!=='s'||event.altKey||event.shiftKey||event.isComposing)return;

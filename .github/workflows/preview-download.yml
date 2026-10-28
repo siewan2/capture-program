@@ -16,13 +16,17 @@ jobs:
           cache: npm
       - run: npm ci --no-audit --no-fund
       - run: npm test
+      - name: Test undo, gallery scroll and native clipboard paste
+        run: node scripts/gallery-smoke.cjs
       - run: npx --no-install electron-builder --win zip --x64 --publish never
       - name: Verify portable package
         shell: pwsh
         run: ./scripts/test-portable.ps1
-      - uses: actions/upload-artifact@v4
+      - name: Upload app files directly for a single ZIP extraction
+        uses: actions/upload-artifact@v4
         with:
-          name: Capture-Program-save-border-preview-Windows-x64
-          path: dist/Capture-Program-*-Windows-x64.zip
+          name: Capture-Program-gallery-update-Windows-x64
+          path: dist/win-unpacked/
           if-no-files-found: error
           retention-days: 14
+          compression-level: 6

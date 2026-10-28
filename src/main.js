@@ -33,6 +33,10 @@ app.whenReady().then(async () => {
     const image=nativeImage.createFromDataURL(data);if(image.isEmpty())throw new Error('이미지를 읽지 못했습니다.');
     clipboard.writeImage(image);return true;
   });
+  ipcMain.handle('read-clipboard-image',event=>{
+    if(event.sender!==main.webContents)return null;
+    const image=clipboard.readImage();return image.isEmpty()?null:image.toDataURL();
+  });
   main.loadFile(path.join(__dirname,'index.html'));
   ipcMain.handle('shortcuts', (_, shortcuts) => applyShortcuts(globalShortcut, shortcuts, mode => {
     if(mode==='gallery'){
