@@ -19,3 +19,11 @@ test('arrows point toward the drag endpoint in every direction and shorten their
   assert.equal(arrowGeometry({x:2,y:2},{x:2,y:2},3),null);
   assert.ok(arrowGeometry({x:0,y:0},{x:3,y:0},10).base.x>0);
 });
+test('selected border widths stay inside the original image, including tiny captures',()=>{
+  for(const thickness of [1,2,3,4,5])for(const [width,height] of [[16,14],[1,1],[3,2]]){
+    const pixels=new Uint8Array(width*height).fill(255);
+    const context={save(){},restore(){},fillRect(x,y,w,h){assert.ok(x>=0&&y>=0&&x+w<=width&&y+h<=height);for(let py=y;py<y+h;py++)for(let px=x;px<x+w;px++)pixels[py*width+px]=0;}};
+    addBlackBorder(context,width,height,thickness);
+    for(let y=0;y<height;y++)for(let x=0;x<width;x++)assert.equal(pixels[y*width+x],x<thickness||x>=width-thickness||y<thickness||y>=height-thickness?0:255);
+  }
+});

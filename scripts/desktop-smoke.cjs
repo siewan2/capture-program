@@ -24,7 +24,7 @@ const path = require('node:path');
     const errors=[];page.on('pageerror',error=>errors.push(error.message));
     await page.waitForFunction(()=>typeof window.captureAPI?.onPresetsUpdated==='function'&&document.querySelector('#region')?.onclick);
     await page.click('#settingsTab');for(const [mode,key] of Object.entries({region:'Control+Shift+C',window:'Control+Shift+W',fixed:'Control+Shift+F',gallery:'Control+Shift+V'}))assert.equal(await page.inputValue('#shortcut-'+mode),key);assert.equal(await page.locator('#captureShadeEnabled').isChecked(),false);
-    assert.equal(await page.locator('#autoBorderEnabled').isChecked(),true);await page.locator('#autoBorderEnabled').uncheck();
+    assert.equal(await page.locator('#autoBorderEnabled').isChecked(),false);assert.equal(await page.inputValue('#borderWidth'),'2');
     await page.locator('#captureShadeEnabled').check();await page.reload();await page.waitForFunction(()=>document.querySelector('#region')?.onclick);assert.equal(await page.locator('#captureShadeEnabled').isChecked(),true);await page.click('#captureTab');
     assert.equal(await page.locator('[data-tool=select]').count(),0);assert.equal(await page.locator('[data-tool=highlighter]').getAttribute('class'),'active');
     await application.evaluate(({globalShortcut})=>{

@@ -12,7 +12,7 @@ try { settings=JSON.parse(localStorage.getItem('settings')); } catch {}
 const defaultShortcuts={region:'Control+Shift+C',window:'Control+Shift+W',fixed:'Control+Shift+F',gallery:'Control+Shift+V'};
 const oldDefaults={region:'Control+Shift+1',window:'Control+Shift+2',fixed:'Control+Shift+3',gallery:'Control+Shift+4'};
 const usesOldDefaults=!!settings?.shortcuts&&Object.entries(oldDefaults).every(([mode,key])=>settings.shortcuts[mode]===key||(mode==='gallery'&&settings.shortcuts[mode]===undefined));
-settings={theme:settings?.theme==='dark'?'dark':'light',magnifier:settings?.magnifier!==false,shade:settings?.shade===true,autoBorder:settings?.autoBorder!==false,lastFixedRect:settings?.lastFixedRect,lastFixedSize:presetSize(settings?.lastFixedSize?.width,settings?.lastFixedSize?.height)?settings.lastFixedSize:null,format:settings?.format==='jpeg'?'jpeg':'png',shortcuts:{...defaultShortcuts,...(usesOldDefaults?{}:settings?.shortcuts)}};
+settings={theme:settings?.theme==='dark'?'dark':'light',magnifier:settings?.magnifier!==false,shade:settings?.shade===true,autoBorder:settings?.autoBorder===true,borderWidth:[1,2,3,4,5].includes(settings?.borderWidth)?settings.borderWidth:2,lastFixedRect:settings?.lastFixedRect,lastFixedSize:presetSize(settings?.lastFixedSize?.width,settings?.lastFixedSize?.height)?settings.lastFixedSize:null,format:settings?.format==='jpeg'?'jpeg':'png',shortcuts:{...defaultShortcuts,...(usesOldDefaults?{}:settings?.shortcuts)}};
 document.documentElement.dataset.theme=settings.theme;$('theme').value=settings.theme;
 $('theme').onchange=()=>{settings.theme=$('theme').value;document.documentElement.dataset.theme=settings.theme;persistSettings();$('settingsStatus').textContent='화면 스타일을 저장했습니다.';};
 function persistSettings(){localStorage.setItem('settings',JSON.stringify(settings));}
@@ -36,6 +36,8 @@ $('startupEnabled').onchange=async()=>{
 };
 refreshStartup();
 $('autoBorderEnabled').checked=settings.autoBorder;
+$('borderWidth').value=String(settings.borderWidth);
+$('borderWidth').onchange=()=>{settings.borderWidth=Number($('borderWidth').value);persistSettings();$('settingsStatus').textContent='테두리 두께를 저장했습니다. 다음 캡처부터 적용됩니다.';};
 $('autoBorderEnabled').onchange=()=>{settings.autoBorder=$('autoBorderEnabled').checked;persistSettings();$('settingsStatus').textContent='자동 테두리 설정을 저장했습니다. 다음 캡처부터 적용됩니다.';};
 $('captureShadeEnabled').checked=settings.shade;
 $('captureShadeEnabled').onchange=()=>{settings.shade=$('captureShadeEnabled').checked;persistSettings();$('settingsStatus').textContent='캡처 화면 음영 설정을 저장했습니다.';};
@@ -146,7 +148,7 @@ window.addEventListener('keydown',event=>{if(event.key==='Control')controlDown=t
 window.addEventListener('blur',()=>{controlDown=false;endZoom();});
 function checkpoint(){current.history.push({data:current.data,baseData:current.baseData});if(current.history.length>20)current.history.shift();}
 function commit(){applyViewScale();current.data=canvas.toDataURL('image/png');current.width=canvas.width;current.height=canvas.height;persistPinned(current);renderGallery();}
-async function addCapture(data){const originalData=data;if(settings.autoBorder){const image=await loadImage(data),framed=document.createElement('canvas');framed.width=image.width;framed.height=image.height;const context=framed.getContext('2d');context.drawImage(image,0,0);addBlackBorder(context,framed.width,framed.height);data=framed.toDataURL();}const item={id:crypto.randomUUID(),data,originalData,baseData:originalData,name:`캡처 ${new Date().toLocaleTimeString('ko-KR')}`,history:[]};captures.unshift(item);await openItem(item);return item;}
+async function addCapture(data){const originalData=data;if(settings.autoBorder){const image=await loadImage(data),framed=document.createElement('canvas');framed.width=image.width;framed.height=image.height;const context=framed.getContext('2d');context.drawImage(image,0,0);addBlackBorder(context,framed.width,framed.height,settings.borderWidth);data=framed.toDataURL();}const item={id:crypto.randomUUID(),data,originalData,baseData:originalData,name:`캡처 ${new Date().toLocaleTimeString('ko-KR')}`,history:[]};captures.unshift(item);await openItem(item);return item;}
 function point(event,target){const r=target.getBoundingClientRect();return{x:Math.max(0,Math.min(target.width,(event.clientX-r.left)*target.width/r.width)),y:Math.max(0,Math.min(target.height,(event.clientY-r.top)*target.height/r.height))};}
 async function begin(mode){
   if(busy||saving||document.querySelector('dialog[open]'))return;
@@ -433,6 +435,14 @@ async function saveItems(items,all=false){
 $('saveAll').onclick=()=>saveItems(captures,true);
 renderGallery();
 restorePinned();
+
+document.addEventListener('keydown',event=>{
+  if(!(event.ctrlKey||event.metaKey)||event.key.toLowerCase()!=='s'||event.altKey||event.shiftKey||event.isComposing)return;
+  if($('capturePanel').hidden||document.querySelector('dialog[open]'))return;
+  event.preventDefault();
+  if(event.repeat||!current||busy||saving||loadingImage||drawing)return;
+  saveItems([current]);
+});
 
 document.addEventListener('keydown',async event=>{
   const target=event.target;
