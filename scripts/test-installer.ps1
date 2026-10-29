@@ -1,7 +1,7 @@
 $ErrorActionPreference = 'Stop'
 $installer = Get-ChildItem -Path "$PSScriptRoot/../dist/Capture-Program-Setup-*.exe" | Select-Object -First 1
 if (!$installer) { throw 'Installer not found' }
-$installDir = Join-Path $env:TEMP ('Capture Program Install Test ' + [guid]::NewGuid())
+$installDir = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) ('Temp\Capture Program Install Test ' + [guid]::NewGuid())
 $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
 $entryName = 'com.siewan.captureprogram'
 $startupLink = Join-Path ([Environment]::GetFolderPath('Startup')) 'Capture Program.lnk'
@@ -15,7 +15,7 @@ try {
   if (!(Test-Path $executable)) { throw 'Installed executable not found' }
   if (!(Test-Path $startupLink)) { throw 'Installer did not create the Startup shortcut' }
   $shortcut = $wshell.CreateShortcut($startupLink)
-  if ($shortcut.TargetPath -ne $executable -or $shortcut.Arguments -ne '--startup-hidden') { throw 'Incorrect Startup shortcut target or arguments' }
+  if ($shortcut.TargetPath -ne $executable -or $shortcut.Arguments -ne '--startup-hidden') { throw "Incorrect Startup shortcut: target=[$($shortcut.TargetPath)] args=[$($shortcut.Arguments)] expected=[$executable]" }
   if (!(Test-Path $desktopLink) -or !(Test-Path $menuLink)) { throw 'Desktop or Start Menu shortcut missing' }
   $env:CAPTURE_TEST_EXE = $executable
   node "$PSScriptRoot/desktop-smoke.cjs"
