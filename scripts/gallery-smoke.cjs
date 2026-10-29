@@ -24,7 +24,7 @@ const fs=require('node:fs/promises'),os=require('node:os'),path=require('node:pa
     await app.evaluate(({clipboard,nativeImage},data)=>clipboard.writeImage(nativeImage.createFromDataURL(data)),fixture);
     const before=await page.evaluate(()=>({ids:captures.map(c=>c.id),selected:current.id}));
     await page.keyboard.press('Control+v');await page.waitForFunction(()=>document.querySelector('#count').textContent==='19'&&!pasting&&!loadingImage);
-    const after=await page.evaluate(()=>({ids:captures.map(c=>c.id),selected:current.id,data:current.data}));
+    const after=await page.evaluate(()=>({ids:captures.map(c=>c.id),selected:current.id,data:current.data,canvasData:canvas.toDataURL()}));
     assert.equal(after.ids.indexOf(after.selected),12);assert.equal(after.ids[13],before.selected);assert.deepEqual(after.ids.filter(id=>id!==after.selected),before.ids);assert.deepEqual(await page.locator('#editor').evaluate(c=>({width:c.width,height:c.height,pixel:[...c.getContext('2d').getImageData(0,0,1,1).data]})),{width:320,height:240,pixel:[255,255,255,255]});
     assert.equal(await page.locator('.capture.selected .capture-select').evaluate(el=>el===document.activeElement),true);
     await page.keyboard.press('Control+v');await page.waitForFunction(()=>document.querySelector('#count').textContent==='20'&&!pasting&&!loadingImage);
@@ -37,7 +37,7 @@ const fs=require('node:fs/promises'),os=require('node:os'),path=require('node:pa
     const buttons=await page.locator('.gallery-actions').evaluate(el=>[...el.children].map(b=>({id:b.id,top:b.getBoundingClientRect().top})));
     assert.deepEqual(buttons.map(b=>b.id),['saveAll','deleteAll']);assert.equal(buttons[0].top,buttons[1].top);
     await page.locator('.capture.selected .capture-select').focus();
-    const deletionState=await page.evaluate(()=>({ids:captures.map(c=>c.id),selected:current.id,data:current.data}));
+    const deletionState=await page.evaluate(()=>({ids:captures.map(c=>c.id),selected:current.id,data:current.data,canvasData:canvas.toDataURL()}));
     await page.click('.capture.selected .capture-pin');await page.waitForFunction(()=>!current.pinPending);
     await page.click('#rotate');await page.waitForFunction(()=>!document.querySelector('#rotate').disabled);
     const rotated=await page.locator('#editor').evaluate(c=>c.toDataURL());
@@ -50,7 +50,7 @@ const fs=require('node:fs/promises'),os=require('node:os'),path=require('node:pa
     assert.equal(await page.locator('#editor').evaluate(c=>c.toDataURL()),rotated,'delete undo restores edited image');
     assert.equal(await page.evaluate(async id=>(await captureAPI.listPinned()).items.some(c=>c.id===id),deletionState.selected),true);
     await page.keyboard.press('Control+z');await page.waitForFunction(()=>!loadingImage);
-    assert.equal(await page.locator('#editor').evaluate(c=>c.toDataURL()),deletionState.data,'next undo restores prior image edit');
+    assert.equal(await page.locator('#editor').evaluate(c=>c.toDataURL()),deletionState.canvasData,'next undo restores prior image edit');
     await page.click('#deleteAll');await page.waitForFunction(()=>!deleting&&document.querySelector('#count').textContent==='0');
     assert.equal(await page.isDisabled('#deleteAll'),true);assert.equal(await page.isDisabled('#undo'),false);
     assert.equal((await page.evaluate(()=>captureAPI.listPinned())).items.length,0);
