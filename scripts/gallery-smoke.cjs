@@ -21,6 +21,12 @@ const fs=require('node:fs/promises'),os=require('node:os'),path=require('node:pa
     }
 
     await page.waitForFunction(()=>document.querySelector('#region')?.onclick);
+    await page.click('#settingsTab');assert.equal(await page.inputValue('#captureDelay'),'30');
+    for(const delay of ['0','30','50','100']){
+      await page.selectOption('#captureDelay',delay);await page.reload();await page.waitForFunction(()=>document.querySelector('#region')?.onclick);
+      await page.click('#settingsTab');assert.equal(await page.inputValue('#captureDelay'),delay);assert.equal(await page.evaluate(()=>JSON.parse(localStorage.settings).captureDelay),Number(delay));
+    }
+    await page.selectOption('#captureDelay','30');await page.click('#captureTab');
     const fixture=await page.evaluate(async()=>{const c=document.createElement('canvas');c.width=320;c.height=240;const x=c.getContext('2d');x.fillStyle='#ffffff';x.fillRect(0,0,320,240);const data=c.toDataURL();for(let i=0;i<18;i++)await addCapture(data);return data;});
     const target=page.locator('.capture-select').nth(12);await target.scrollIntoViewIfNeeded();
     const scroll=await page.locator('aside').evaluate(el=>el.scrollTop);assert.ok(scroll>0);

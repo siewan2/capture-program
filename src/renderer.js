@@ -14,7 +14,7 @@ try { settings=JSON.parse(localStorage.getItem('settings')); } catch {}
 const defaultShortcuts={region:'Control+Shift+C',window:'Control+Shift+W',fixed:'Control+Shift+F',gallery:'Control+Shift+V'};
 const oldDefaults={region:'Control+Shift+1',window:'Control+Shift+2',fixed:'Control+Shift+3',gallery:'Control+Shift+4'};
 const usesOldDefaults=!!settings?.shortcuts&&Object.entries(oldDefaults).every(([mode,key])=>settings.shortcuts[mode]===key||(mode==='gallery'&&settings.shortcuts[mode]===undefined));
-settings={theme:settings?.theme==='dark'?'dark':'light',magnifier:settings?.magnifier!==false,shade:settings?.shade===true,autoBorder:settings?.autoBorder===true,borderWidth:[1,2,3,4,5].includes(settings?.borderWidth)?settings.borderWidth:2,lastFixedRect:settings?.lastFixedRect,lastFixedSize:presetSize(settings?.lastFixedSize?.width,settings?.lastFixedSize?.height)?settings.lastFixedSize:null,format:settings?.format==='jpeg'?'jpeg':'png',shortcuts:{...defaultShortcuts,...(usesOldDefaults?{}:settings?.shortcuts)}};
+settings={theme:settings?.theme==='dark'?'dark':'light',magnifier:settings?.magnifier!==false,shade:settings?.shade===true,autoBorder:settings?.autoBorder===true,captureDelay:[0,30,50,100].includes(settings?.captureDelay)?settings.captureDelay:30,borderWidth:[1,2,3,4,5].includes(settings?.borderWidth)?settings.borderWidth:2,lastFixedRect:settings?.lastFixedRect,lastFixedSize:presetSize(settings?.lastFixedSize?.width,settings?.lastFixedSize?.height)?settings.lastFixedSize:null,format:settings?.format==='jpeg'?'jpeg':'png',shortcuts:{...defaultShortcuts,...(usesOldDefaults?{}:settings?.shortcuts)}};
 document.documentElement.dataset.theme=settings.theme;$('theme').value=settings.theme;
 $('theme').onchange=()=>{settings.theme=$('theme').value;document.documentElement.dataset.theme=settings.theme;persistSettings();$('settingsStatus').textContent='화면 스타일을 저장했습니다.';};
 function persistSettings(){localStorage.setItem('settings',JSON.stringify(settings));}
@@ -37,6 +37,8 @@ $('startupEnabled').onchange=async()=>{
   finally{$('startupEnabled').disabled=false;}
 };
 refreshStartup();
+$('captureDelay').value=String(settings.captureDelay);
+$('captureDelay').onchange=()=>{settings.captureDelay=Number($('captureDelay').value);persistSettings();$('settingsStatus').textContent='캡처 지연시간을 저장했습니다.';};
 $('autoBorderEnabled').checked=settings.autoBorder;
 $('borderWidth').value=String(settings.borderWidth);
 $('borderWidth').onchange=()=>{settings.borderWidth=Number($('borderWidth').value);persistSettings();$('settingsStatus').textContent='테두리 두께를 저장했습니다. 다음 캡처부터 적용됩니다.';};
@@ -173,7 +175,7 @@ async function begin(mode){
   cancelCrop();finishText(true);finishFreeform(true);busy=true;
   try{
     const preset=mode==='fixed'&&presetSize(settings.lastFixedSize?.width,settings.lastFixedSize?.height)?settings.lastFixedSize:presets[Number($('presets').value)];
-    const data=await window.captureAPI.captureOverlay(mode,preset,{magnifier:settings.magnifier,shade:settings.shade,lastFixedRect:settings.lastFixedRect,presets});
+    const data=await window.captureAPI.captureOverlay(mode,preset,{magnifier:settings.magnifier,shade:settings.shade,captureDelay:settings.captureDelay,lastFixedRect:settings.lastFixedRect,presets});
     if(data){
       showTab('capture');const item=await addCapture(data);
       if(mode==='fixed'&&presetSize(item.width,item.height)){settings.lastFixedSize={width:item.width,height:item.height};persistSettings();}

@@ -54,7 +54,8 @@ function installOverlayCapture(main){
       const wasVisible=main.isVisible();
       main.hide();
       // Wait for the editor hide animation to finish before taking the desktop snapshot.
-      if(wasVisible)await new Promise(resolve=>setTimeout(resolve,100));
+      const delay=[0,30,50,100].includes(options.captureDelay)?options.captureDelay:30;
+      if(wasVisible&&delay>0)await new Promise(resolve=>setTimeout(resolve,delay));
       if(active!==session)return result;
       const displays=screen.getAllDisplays();
       const thumbnailSize={width:Math.max(...displays.map(d=>Math.ceil(d.bounds.width*d.scaleFactor))),height:Math.max(...displays.map(d=>Math.ceil(d.bounds.height*d.scaleFactor)))};
