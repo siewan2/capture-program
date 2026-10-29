@@ -1,7 +1,9 @@
 !include "nsDialogs.nsh"
 !include "LogicLib.nsh"
 !include "FileFunc.nsh"
-Var CaptureStartupEnabled
+!ifndef BUILD_UNINSTALLER
+  Var CaptureStartupEnabled
+!endif
 
 !macro customInit
   StrCpy $CaptureStartupEnabled ${BST_CHECKED}
