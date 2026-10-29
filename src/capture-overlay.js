@@ -53,8 +53,8 @@ function installOverlayCapture(main){
     try{
       const wasVisible=main.isVisible();
       main.hide();
-      // Only allow the compositor to remove a visible editor; tray captures need no delay.
-      if(wasVisible)await new Promise(resolve=>setTimeout(resolve,40));
+      // Wait for the editor hide animation to finish before taking the desktop snapshot.
+      if(wasVisible)await new Promise(resolve=>setTimeout(resolve,100));
       if(active!==session)return result;
       const displays=screen.getAllDisplays();
       const thumbnailSize={width:Math.max(...displays.map(d=>Math.ceil(d.bounds.width*d.scaleFactor))),height:Math.max(...displays.map(d=>Math.ceil(d.bounds.height*d.scaleFactor)))};

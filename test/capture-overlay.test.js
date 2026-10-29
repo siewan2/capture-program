@@ -59,10 +59,10 @@ test('fixed overlay can add/select presets and rejects unrelated renderers',asyn
   s.events['overlay-cancel']({sender});assert.equal(await result,null);
 });
 
-test('tray capture skips compositor delay while a visible editor waits only briefly before snapshot',async()=>{
+test('tray capture skips compositor delay while a visible editor waits 100ms after hiding before snapshot',async()=>{
   for(const visible of [false,true]){
     const s=setup(visible),result=s.capture('region');await ready(s);
-    assert.deepEqual(s.delays,visible?[40]:[]);
+    assert.deepEqual(s.delays,visible?[100]:[]);
     s.events['overlay-cancel']({sender:s.windows[0].webContents});await result;
   }
 });
