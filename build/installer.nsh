@@ -16,7 +16,6 @@ Var CaptureStartupEnabled
 
 !macro customPageAfterChangeDir
   Page custom CaptureStartupPage CaptureStartupLeave
-!macroend
 
 Function CaptureStartupPage
   !insertmacro MUI_HEADER_TEXT "Windows 시작 설정" "로그인할 때 Capture Program을 자동으로 실행할 수 있습니다."
@@ -36,6 +35,7 @@ FunctionEnd
 Function CaptureStartupLeave
   ${NSD_GetState} $CaptureStartupCheckbox $CaptureStartupEnabled
 FunctionEnd
+!macroend
 
 !macro customInstall
   SetShellVarContext current
