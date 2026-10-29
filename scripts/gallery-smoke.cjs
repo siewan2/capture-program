@@ -12,10 +12,11 @@ const fs=require('node:fs/promises'),os=require('node:os'),path=require('node:pa
       const originalEnabled=startupState.enabled;
       try{
         await page.evaluate(()=>captureAPI.setStartup(true));
-        const shortcut=await app.evaluate(({app,shell})=>{const p=require('node:path').join(app.getPath('appData'),'Microsoft','Windows','Start Menu','Programs','Startup','Capture Program.lnk');return shell.readShortcutLink(p);});
-        assert.equal(shortcut.args,'--startup-hidden');assert.equal(shortcut.target.toLowerCase(),(await app.evaluate(()=>process.execPath)).toLowerCase());
+        const startupPath=await app.evaluate(({app})=>app.getPath('appData')+'\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\Capture Program.lnk');
+        const shortcut=await app.evaluate(({shell},file)=>shell.readShortcutLink(file),startupPath);
+        assert.equal(shortcut.args,'--startup-hidden');assert.equal(shortcut.target.toLowerCase(),(await app.evaluate(({app})=>app.getPath('exe'))).toLowerCase());
         assert.equal((await page.evaluate(()=>captureAPI.setStartup(false))).enabled,false);
-        assert.equal(await app.evaluate(({app})=>require('node:fs').existsSync(require('node:path').join(app.getPath('appData'),'Microsoft','Windows','Start Menu','Programs','Startup','Capture Program.lnk'))),false);
+        assert.equal(await fs.stat(startupPath).then(()=>true,()=>false),false);
       }finally{await page.evaluate(enabled=>captureAPI.setStartup(enabled),originalEnabled);}
     }
 
