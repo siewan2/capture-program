@@ -7,6 +7,19 @@ const fs=require('node:fs/promises'),os=require('node:os'),path=require('node:pa
     app=await electron.launch({executablePath:process.env.CAPTURE_TEST_EXE||require('electron'),args:[...(process.env.CAPTURE_TEST_EXE?[]:[path.resolve(__dirname,'..')]),`--user-data-dir=${profile}`],timeout:60000});
     const page=await app.firstWindow();page.setDefaultTimeout(20000);const errors=[];page.on('pageerror',e=>errors.push(e.message));
     await page.waitForFunction(()=>document.querySelector('#region')?.onclick);
+    const startupState=await page.evaluate(()=>captureAPI.getStartup());
+    if(startupState.supported){
+      const originalEnabled=startupState.enabled;
+      try{
+        await page.evaluate(()=>captureAPI.setStartup(true));
+        const shortcut=await app.evaluate(({app,shell})=>{const p=require('node:path').join(app.getPath('appData'),'Microsoft','Windows','Start Menu','Programs','Startup','Capture Program.lnk');return shell.readShortcutLink(p);});
+        assert.equal(shortcut.args,'--startup-hidden');assert.equal(shortcut.target.toLowerCase(),(await app.evaluate(()=>process.execPath)).toLowerCase());
+        assert.equal((await page.evaluate(()=>captureAPI.setStartup(false))).enabled,false);
+        assert.equal(await app.evaluate(({app})=>require('node:fs').existsSync(require('node:path').join(app.getPath('appData'),'Microsoft','Windows','Start Menu','Programs','Startup','Capture Program.lnk'))),false);
+      }finally{await page.evaluate(enabled=>captureAPI.setStartup(enabled),originalEnabled);}
+    }
+
+    await page.waitForFunction(()=>document.querySelector('#region')?.onclick);
     const fixture=await page.evaluate(async()=>{const c=document.createElement('canvas');c.width=320;c.height=240;const x=c.getContext('2d');x.fillStyle='#ffffff';x.fillRect(0,0,320,240);const data=c.toDataURL();for(let i=0;i<18;i++)await addCapture(data);return data;});
     const target=page.locator('.capture-select').nth(12);await target.scrollIntoViewIfNeeded();
     const scroll=await page.locator('aside').evaluate(el=>el.scrollTop);assert.ok(scroll>0);

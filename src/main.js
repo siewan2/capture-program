@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, screen, globalShortcut, clipboard, nativeImage, Tray, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, screen, globalShortcut, clipboard, nativeImage, Tray, Menu, shell } = require('electron');
 const path = require('node:path');
 const {installBackground}=require('./background');
 const {installOverlayCapture,isOverlayActive}=require('./capture-overlay');
@@ -22,7 +22,7 @@ app.whenReady().then(async () => {
   ipcMain.handle('list-pinned',()=>pinned.list());
   ipcMain.handle('put-pinned',(_,item)=>pinned.put(item));
   ipcMain.handle('remove-pinned',(_,id)=>pinned.remove(id));
-  const startup=createStartup({app});
+  const startup=createStartup({app,shell});
   ipcMain.handle('get-startup',()=>startup.get());
   ipcMain.handle('set-startup',(_,enabled)=>startup.set(enabled));
   tray=installBackground({app,main,Tray,Menu,iconPath:path.join(__dirname,'tray.png')});
