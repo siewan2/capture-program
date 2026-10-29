@@ -1,7 +1,6 @@
 !include "nsDialogs.nsh"
 !include "LogicLib.nsh"
 !include "FileFunc.nsh"
-Var CaptureStartupCheckbox
 Var CaptureStartupEnabled
 
 !macro customInit
@@ -15,6 +14,7 @@ Var CaptureStartupEnabled
 !macroend
 
 !macro customPageAfterChangeDir
+  Var CaptureStartupCheckbox
   Page custom CaptureStartupPage CaptureStartupLeave
 
 Function CaptureStartupPage
